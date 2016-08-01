@@ -19,6 +19,8 @@ executable auth-token-swagger-gen
   build-depends:       
       base >= 4.7 && < 5
     , servant-auth-token-api 
-    , servant-swagger
-    , aeson
+    , servant-swagger >= 0.1
+    , aeson >= 0.11
     , bytestring >= 0.10
+    , lens >= 4
+    , swagger2
