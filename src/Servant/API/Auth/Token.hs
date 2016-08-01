@@ -430,7 +430,7 @@ type AuthGetGroupMethod = "auth" :> "group"
 type AuthPostGroupMethod = "auth" :> "group"
   :> ReqBody '[JSON] UserGroup
   :> TokenHeader '["auth-update"]
-  :> Post '[JSON] UserGroupId
+  :> Post '[JSON] (OnlyId UserGroupId)
 
 -- | Replace info about given user group, requires 'authUpdatePerm' for token
 type AuthPutGroupMethod = "auth" :> "group"
