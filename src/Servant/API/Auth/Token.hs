@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-|
 Module      : Servant.API.Auth.Token
@@ -523,3 +524,8 @@ instance ToSample Word where
 
 instance ToSample Text where 
   toSamples _ = samples ["", "some text", "magic"]
+
+#if MIN_VERSION_servant_docs(0,8,0)
+instance ToSample () where 
+  toSamples _ = singleSample ()
+#endif
