@@ -13,17 +13,19 @@ module Servant.API.Auth.Token(
   -- * API specs
     AuthAPI
   , authAPI
-  , UserId
-  , SimpleToken
+  -- ** Token
   , Token(..)
   , MToken
+  , TokenHeader
+  , SimpleToken
+  -- ** User
+  , UserId
   , Login
   , Password
   , Email
   , Permission
   , Seconds
   , RestoreCode
-  , TokenHeader
   , ReqRegister(..)
   , RespUserInfo(..)
   , PatchUser(..)
@@ -81,12 +83,18 @@ type SimpleToken = Text
 -- | Shortcut for Maybe Token with attached permissions
 type MToken (perms :: [Symbol]) = Maybe (Token perms)
 
-type Login = Text -- ^ Username for login
-type Password = Text -- ^ Password for login
-type Email = Text -- ^ User email
-type Permission = Text -- ^ Special tag for a permission that a user has
-type Seconds = Word -- ^ Amount of seconds
-type RestoreCode = Text -- ^ Special tag for password restore 
+-- | Username for login
+type Login = Text 
+-- | Password for login
+type Password = Text
+-- | User email
+type Email = Text 
+-- | Special tag for a permission that a user has
+type Permission = Text 
+-- | Amount of seconds
+type Seconds = Word
+-- | Special tag for password restore 
+type RestoreCode = Text 
 
 -- | Token header that we require for authorization marked 
 -- by permissions that are expected from the token to pass guarding functions.

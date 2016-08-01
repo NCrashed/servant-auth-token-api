@@ -1,3 +1,26 @@
+{-|
+Module      : Servant.API.Auth.Token.Internal.DeriveJson
+Description : Helpers for aeson deriving without name prefixes.
+Copyright   : (c) Anton Gushcha, 2016
+License     : MIT
+Maintainer  : ncrashed@gmail.com
+Stability   : experimental
+Portability : Portable
+
+Common usage:
+
+> data PagedList i a = PagedList {
+>   pagedListItems :: ![a] -- ^ Payload
+> , pagedListPages :: !Word -- ^ Count of available pages
+> } deriving (Generic, Show)
+> 
+> $(deriveJSON (derivePrefix "pagedList") ''PagedList)
+
+It will work with the following jsons:
+
+> { "items": [], "pages": 0 }
+
+-}
 module Servant.API.Auth.Token.Internal.DeriveJson(
     derivePrefix
   , deriveJSON
