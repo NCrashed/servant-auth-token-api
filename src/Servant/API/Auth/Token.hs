@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-|
 Module      : Servant.API.Auth.Token
 Description : API for token based authorisation.
@@ -12,7 +13,25 @@ Portability : Portable
 module Servant.API.Auth.Token(
   -- * API specs
     AuthAPI
+  , AuthSigninMethod
+  , AuthTouchMethod
+  , AuthTokenInfoMethod
+  , AuthSignoutMethod
+  , AuthSignupMethod
+  , AuthUsersMethod
+  , AuthGetUserMethod
+  , AuthPatchUserMethod
+  , AuthPutUserMethod
+  , AuthDeleteUserMethod
+  , AuthRestoreMethod
+  , AuthGetGroupMethod
+  , AuthPostGroupMethod
+  , AuthPutGroupMethod
+  , AuthPatchGroupMethod
+  , AuthDeleteGroupMethod
+  , AuthGroupsMethod
   , authAPI
+  , authDocs
   -- ** Token
   , Token(..)
   , MToken
@@ -34,7 +53,6 @@ module Servant.API.Auth.Token(
   , UserGroupId
   , UserGroup(..)
   , PatchUserGroup(..)
-  , UserGroups(..)
   -- ** Default permissions
   , adminPerm
   , registerPerm
@@ -43,6 +61,8 @@ module Servant.API.Auth.Token(
   , authDeletePerm
   -- * Swagger helpers
   , authOperations
+  -- * Reexports
+  , module Reexport
   ) where 
 
 import Control.Lens
@@ -56,11 +76,12 @@ import Data.Swagger.Operation
 import GHC.Generics 
 import GHC.TypeLits
 import Servant.API
+import Servant.Docs 
 import Servant.Swagger
 
 import Data.Text (Text)
 
-import Servant.API.Auth.Token.Pagination
+import Servant.API.Auth.Token.Pagination as Reexport
 import Servant.API.Auth.Token.Internal.DeriveJson 
 import Servant.API.Auth.Token.Internal.Schema
 
@@ -77,6 +98,10 @@ instance FromHttpApiData (Token perms) where
 
 instance ToHttpApiData (Token perms) where 
   toUrlPiece = toUrlPiece . unToken
+
+instance ToSample (Token perms) where
+  toSamples _ = singleSample s
+    where s = Token "123e4567-e89b-12d3-a456-426655440000"
 
 -- | Token that doesn't have attached compile-time permissions
 type SimpleToken = Text 
@@ -121,9 +146,20 @@ instance ToSchema ReqRegister where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "reqReg"
 
+instance ToSample ReqRegister where
+  toSamples _ = singleSample s
+    where 
+    s = ReqRegister {
+        reqRegLogin = "ncrashed"
+      , reqRegPassword = "mydogishappy"
+      , reqRegEmail = "ncrashed@gmail.com"
+      , reqRegPermissions = ["auth-info", "auth-update"]
+      , reqRegGroups = Nothing
+      }
+
 -- | Response with user info
 data RespUserInfo = RespUserInfo {
-  respUserId :: !Word
+  respUserId :: !UserId
 , respUserLogin :: !Login 
 , respUserEmail :: !Email 
 , respUserPermissions :: ![Permission]
@@ -135,6 +171,17 @@ instance ToSchema RespUserInfo where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "respUser"
 
+instance ToSample RespUserInfo where
+  toSamples _ = singleSample s
+    where 
+    s = RespUserInfo {
+        respUserId = 42
+      , respUserLogin = "ncrashed"
+      , respUserEmail = "ncrashed@gmail.com"
+      , respUserPermissions = ["admin"]
+      , respUserGroups = [0, 1]
+      }
+
 -- | Response with users info and pagination
 data RespUsersInfo = RespUsersInfo {
   respUsersItems :: ![RespUserInfo]
@@ -145,6 +192,18 @@ $(deriveJSON (derivePrefix "respUsers") ''RespUsersInfo)
 instance ToSchema RespUsersInfo where 
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "respUsers"
+
+instance ToSample RespUsersInfo where
+  toSamples _ = singleSample s
+    where 
+    s = RespUsersInfo [u] 1
+    u = RespUserInfo {
+        respUserId = 42
+      , respUserLogin = "ncrashed"
+      , respUserEmail = "ncrashed@gmail.com"
+      , respUserPermissions = ["admin"]
+      , respUserGroups = [0, 1]
+      }
 
 -- | Request body for patching user
 data PatchUser = PatchUser {
@@ -160,6 +219,30 @@ instance ToSchema PatchUser where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "patchUser"
 
+instance ToSample PatchUser where
+  toSamples _ = samples [s1, s2, s3]
+    where 
+    s1 = PatchUser {
+        patchUserLogin = Just "nusicrashed"
+      , patchUserPassword = Just "mycatishappy"
+      , patchUserEmail = Just "ncrashed@mail.ru"
+      , patchUserPermissions = Just []
+      , patchUserGroups = Nothing
+      }
+    s2 = PatchUser {
+        patchUserLogin = Nothing
+      , patchUserPassword = Nothing
+      , patchUserEmail = Just "ncrashed@mail.ru"
+      , patchUserPermissions = Nothing
+      , patchUserGroups = Nothing
+      }
+    s3 = PatchUser {
+        patchUserLogin = Nothing
+      , patchUserPassword = Just "mycatishappy"
+      , patchUserEmail = Nothing
+      , patchUserPermissions = Nothing
+      , patchUserGroups = Just [1, 2]
+      }
 
 -- | Data of user group, groups allows to group permissions
 -- and assign them to particular users in batch manner.
@@ -177,6 +260,16 @@ instance ToSchema UserGroup where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "userGroup"
 
+instance ToSample UserGroup where
+  toSamples _ = singleSample s
+    where 
+    s = UserGroup {
+        userGroupName = "moderators"
+      , userGroupUsers = [0, 42, 3]
+      , userGroupPermissions = ["auth-register", "auth-update", "auth-delete"]
+      , userGroupParent = Nothing
+      }
+
 -- | Data type that is used to patch 'UserGroup'
 data PatchUserGroup = PatchUserGroup {
   patchUserGroupName :: !(Maybe Text)
@@ -192,117 +285,179 @@ instance ToSchema PatchUserGroup where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "patchUserGroup"
 
--- | Response with part of all known user groups
-data UserGroups = UserGroups {
-  userGroupsItems :: [WithId UserGroupId UserGroup]
-, userGroupsPages :: !Word
-} deriving (Generic, Show)
-$(deriveJSON (derivePrefix "userGroups") ''UserGroups)
+instance ToSample PatchUserGroup where
+  toSamples _ = samples [s1, s2, s3]
+    where 
+    s1 = PatchUserGroup {
+        patchUserGroupName = Just "developers"
+      , patchUserGroupUsers = Just [0, 42, 3]
+      , patchUserGroupPermissions = Just ["program", "eat", "sleep"]
+      , patchUserGroupParent = Just 2
+      , patchUserGroupNoParent = Nothing
+      }
+    s2 = PatchUserGroup {
+        patchUserGroupName = Nothing
+      , patchUserGroupUsers = Nothing
+      , patchUserGroupPermissions = Just ["program", "sleep"]
+      , patchUserGroupParent = Nothing
+      , patchUserGroupNoParent = Nothing
+      }
+    s3 = PatchUserGroup {
+        patchUserGroupName = Nothing
+      , patchUserGroupUsers = Nothing
+      , patchUserGroupPermissions = Nothing
+      , patchUserGroupParent = Nothing
+      , patchUserGroupNoParent = Just True
+      }
 
-instance ToSchema UserGroups where 
-  declareNamedSchema = genericDeclareNamedSchema $
-    schemaOptionsDropPrefix "userGroups"
+instance ToParam (QueryParam "login" Login) where
+  toParam _ = DocQueryParam "login" ["ncrashed", "buddy"] "Any valid login for user" Normal
+instance ToParam (QueryParam "password" Password) where
+  toParam _ = DocQueryParam "password" ["123", "qwerty"] "Any valid password for user" Normal
+instance ToParam (QueryParam "expire" Seconds) where
+  toParam _ = DocQueryParam "expire" ["600", "30"] "Amount of time in seconds the returned token should be valid for, server can restrain maximum token life" Normal
+instance ToParam (QueryParam "code" RestoreCode) where
+  toParam _ = DocQueryParam "code" ["fdfygie", "sdf7230"] "Code that was sended to the user by some secure way" Normal
+
+instance ToCapture (Capture "user-id" UserId) where
+  toCapture _ = DocCapture "user-id" "unique identifier"
+instance ToCapture (Capture "group-id" UserGroupId) where
+  toCapture _ = DocCapture "group-id" "identifier of a user group"
 
 -- | Generic authorization API
-type AuthAPI = 
-  -- How to get a token, expire of 'Nothing' means 
-  -- some default value (server config)
-       "auth" :> "signin"
-              :> QueryParam "login" Login 
-              :> QueryParam "password" Password 
-              :> QueryParam "expire" Seconds
-              :> Get '[JSON] (OnlyField "token" SimpleToken)
-  -- Client cat expand the token lifetime, no permissions are required
-  :<|> "auth" :> "touch" 
-              :> QueryParam "expire" Seconds
-              :> TokenHeader '[]
-              :> Post '[JSON] ()
-  -- Get client info that is binded to the token
-  :<|> "auth" :> "token"
-              :> TokenHeader '[]
-              :> Get '[JSON] RespUserInfo
-  -- Close session, after call of the method the
-  -- token in header is not valid.
-  :<|> "auth" :> "signout"
-              :> TokenHeader '[]
-              :> Post '[JSON] ()
-  -- Creation of new user, requires 'registerPerm' for token
-  :<|> "auth" :> "signup"
-              :> ReqBody '[JSON] ReqRegister
-              :> TokenHeader '["auth-register"]
-              :> Post '[JSON] (OnlyField "user" UserId)
-  -- Getting list of all users, requires 'authInfoPerm' for token
-  :<|> "auth" :> "users"
-              :> PageParam
-              :> PageSizeParam
-              :> TokenHeader '["auth-info"]
-              :> Get '[JSON] RespUsersInfo
-  -- Getting info about user, requires 'authInfoPerm' for token
-  :<|> "auth" :> "user"
-              :> Capture "id" UserId 
-              :> TokenHeader '["auth-info"]
-              :> Get '[JSON] RespUserInfo
-  -- Updating login/email/password, requires 'authUpdatePerm' for token
-  :<|> "auth" :> "user"
-              :> Capture "id" UserId 
-              :> ReqBody '[JSON] PatchUser
-              :> TokenHeader '["auth-update"]
-              :> Patch '[JSON] ()
-  -- Replace user with the user in the body, requires 'authUpdatePerm' for token
-  :<|> "auth" :> "user"
-              :> Capture "id" UserId 
-              :> ReqBody '[JSON] ReqRegister
-              :> TokenHeader '["auth-update"]
-              :> Put '[JSON] ()
-  -- Delete user from DB, requires 'authDeletePerm' and will cause cascade
-  -- deletion, that is your usually want
-  :<|> "auth" :> "user"
-              :> Capture "id" UserId 
-              :> TokenHeader '["auth-delete"]
-              :> Delete '[JSON] ()
-  -- Generate new password for user. There is two phases, first, the method
-  -- is called without 'code' parameter. The system sends email with a restore code
-  -- to email. After that a call of the method with the code is needed to 
-  -- change password. Need configured SMTP server.
-  :<|> "auth" :> "restore" 
-              :> Capture "id" UserId
-              :> QueryParam "code" RestoreCode 
-              :> QueryParam "password" Password 
-              :> Post '[JSON] ()
+type AuthAPI = "auth" :> (
+       AuthSigninMethod
+  :<|> AuthTouchMethod
+  :<|> AuthTokenInfoMethod
+  :<|> AuthSignoutMethod
+  :<|> AuthSignupMethod
+  :<|> AuthUsersMethod
+  :<|> AuthGetUserMethod
+  :<|> AuthPatchUserMethod
+  :<|> AuthPutUserMethod
+  :<|> AuthDeleteUserMethod
+  :<|> AuthRestoreMethod
+  :<|> AuthGetGroupMethod
+  :<|> AuthPostGroupMethod
+  :<|> AuthPutGroupMethod
+  :<|> AuthPatchGroupMethod
+  :<|> AuthDeleteGroupMethod
+  :<|> AuthGroupsMethod
+  )
 
-  -- Getting info about user group, requires 'authInfoPerm' for token
-  :<|> "auth" :> "group"
-              :> Capture "id" UserGroupId
-              :> TokenHeader '["auth-info"]
-              :> Get '[JSON] UserGroup
-  -- Inserting new user group, requires 'authUpdatePerm' for token
-  :<|> "auth" :> "group"
-              :> ReqBody '[JSON] UserGroup
-              :> TokenHeader '["auth-update"]
-              :> Post '[JSON] UserGroupId
-  -- Replace info about given user group, requires 'authUpdatePerm' for token
-  :<|> "auth" :> "group"
-              :> Capture "id" UserGroupId
-              :> ReqBody '[JSON] UserGroup
-              :> TokenHeader '["auth-update"]
-              :> Put '[JSON] ()
-  -- Patch info about given user group, requires 'authUpdatePerm' for token
-  :<|> "auth" :> "group"
-              :> Capture "id" UserGroupId
-              :> ReqBody '[JSON] PatchUserGroup
-              :> TokenHeader '["auth-update"]
-              :> Patch '[JSON] ()
-  -- Delete all info about given user group, requires 'authDeletePerm' for token
-  :<|> "auth" :> "group"
-              :> Capture "id" UserGroupId
-              :> TokenHeader '["auth-delete"]
-              :> Delete '[JSON] ()
-  -- Get list of user groups, requires 'authInfoPerm' for token 
-  :<|> "auth" :> "group"
-              :> PageParam
-              :> PageSizeParam
-              :> TokenHeader '["auth-info"]
-              :> Get '[JSON] UserGroups
+-- | How to get a token, expire of 'Nothing' means 
+-- some default value (server config)
+type AuthSigninMethod = "signin"
+  :> QueryParam "login" Login 
+  :> QueryParam "password" Password 
+  :> QueryParam "expire" Seconds
+  :> Get '[JSON] (OnlyField "token" SimpleToken)
+
+-- | Client cat expand the token lifetime, no permissions are required
+type AuthTouchMethod = "touch" 
+  :> QueryParam "expire" Seconds
+  :> TokenHeader '[]
+  :> Post '[JSON] ()
+
+-- | Get client info that is binded to the token
+type AuthTokenInfoMethod = "token"
+  :> TokenHeader '[]
+  :> Get '[JSON] RespUserInfo
+
+-- | Close session, after call of the method the
+-- token in header is not valid.
+type AuthSignoutMethod = "signout"
+  :> TokenHeader '[]
+  :> Post '[JSON] ()
+
+-- | Creation of new user, requires 'registerPerm' for token
+type AuthSignupMethod = "signup"
+  :> ReqBody '[JSON] ReqRegister
+  :> TokenHeader '["auth-register"]
+  :> Post '[JSON] (OnlyField "user" UserId)
+
+-- | Getting list of all users, requires 'authInfoPerm' for token
+type AuthUsersMethod = "users"
+  :> PageParam
+  :> PageSizeParam
+  :> TokenHeader '["auth-info"]
+  :> Get '[JSON] RespUsersInfo
+
+-- | Getting info about user, requires 'authInfoPerm' for token
+type AuthGetUserMethod = "user"
+  :> Capture "user-id" UserId 
+  :> TokenHeader '["auth-info"]
+  :> Get '[JSON] RespUserInfo
+
+-- | Updating login/email/password, requires 'authUpdatePerm' for token
+type AuthPatchUserMethod = "user"
+  :> Capture "user-id" UserId 
+  :> ReqBody '[JSON] PatchUser
+  :> TokenHeader '["auth-update"]
+  :> Patch '[JSON] ()
+
+-- | Replace user with the user in the body, requires 'authUpdatePerm' for token
+type AuthPutUserMethod = "user"
+  :> Capture "user-id" UserId 
+  :> ReqBody '[JSON] ReqRegister
+  :> TokenHeader '["auth-update"]
+  :> Put '[JSON] ()
+
+-- | Delete user from DB, requires 'authDeletePerm' and will cause cascade
+-- deletion, that is your usually want
+type AuthDeleteUserMethod = "user"
+  :> Capture "user-id" UserId 
+  :> TokenHeader '["auth-delete"]
+  :> Delete '[JSON] ()
+
+-- | Generate new password for user. There is two phases, first, the method
+-- is called without 'code' parameter. The system sends email with a restore code
+-- to user email or sms (its depends on server). After that a call of the method 
+-- with the code is needed to change password.
+type AuthRestoreMethod = "restore" 
+  :> Capture "user-id" UserId
+  :> QueryParam "code" RestoreCode 
+  :> QueryParam "password" Password 
+  :> Post '[JSON] ()
+
+-- | Getting info about user group, requires 'authInfoPerm' for token
+type AuthGetGroupMethod = "group"
+  :> Capture "group-id" UserGroupId
+  :> TokenHeader '["auth-info"]
+  :> Get '[JSON] UserGroup
+
+-- | Inserting new user group, requires 'authUpdatePerm' for token
+type AuthPostGroupMethod = "group"
+  :> ReqBody '[JSON] UserGroup
+  :> TokenHeader '["auth-update"]
+  :> Post '[JSON] UserGroupId
+
+-- | Replace info about given user group, requires 'authUpdatePerm' for token
+type AuthPutGroupMethod = "group"
+  :> Capture "group-id" UserGroupId
+  :> ReqBody '[JSON] UserGroup
+  :> TokenHeader '["auth-update"]
+  :> Put '[JSON] ()
+
+-- | Patch info about given user group, requires 'authUpdatePerm' for token
+type AuthPatchGroupMethod = "group"
+  :> Capture "group-id" UserGroupId
+  :> ReqBody '[JSON] PatchUserGroup
+  :> TokenHeader '["auth-update"]
+  :> Patch '[JSON] ()
+
+-- | Delete all info about given user group, requires 'authDeletePerm' for token
+type AuthDeleteGroupMethod = "group"
+  :> Capture "group-id" UserGroupId
+  :> TokenHeader '["auth-delete"]
+  :> Delete '[JSON] ()
+
+-- | Get list of user groups, requires 'authInfoPerm' for token 
+type AuthGroupsMethod = "group"
+  :> PageParam
+  :> PageSizeParam
+  :> TokenHeader '["auth-info"]
+  :> Get '[JSON] (PagedList UserGroupId UserGroup)
 
 -- | Proxy type for auth API, used to pass the type-level info into 
 -- client/docs generation functions
@@ -332,3 +487,13 @@ authDeletePerm = "auth-delete"
 -- | Select only operations of the Auth API
 authOperations :: Traversal' Swagger Operation
 authOperations = operationsOf $ toSwagger (Proxy :: Proxy AuthAPI)
+
+-- | "Servant.Docs" documentation of the Auth API
+authDocs :: API
+authDocs = docsWithIntros [] (Proxy :: Proxy AuthAPI)
+
+instance ToSample Word where 
+  toSamples _ = samples [0, 4, 8, 15, 16, 23, 42]
+
+instance ToSample Text where 
+  toSamples _ = samples ["", "some text", "magic"]
