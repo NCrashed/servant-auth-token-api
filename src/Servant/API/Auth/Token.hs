@@ -1,5 +1,4 @@
 {-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-|
@@ -38,6 +37,9 @@ module Servant.API.Auth.Token(
   , MToken
   , TokenHeader
   , SimpleToken
+  , PermsList(..)
+  , downgradeToken'
+  , downgradeToken
   -- ** User
   , UserId
   , Login
@@ -82,6 +84,7 @@ import Servant.Docs
 import Servant.Swagger
 
 import Data.Text (Text)
+import qualified Data.Text as T 
 
 import Servant.API.Auth.Token.Pagination as Reexport
 import Servant.API.Auth.Token.Internal.DeriveJson 
@@ -529,3 +532,45 @@ instance ToSample Text where
 instance ToSample () where 
   toSamples _ = singleSample ()
 #endif
+
+class PermsList (a :: [Symbol]) where 
+  unliftPerms :: forall proxy . proxy a -> [Permission]
+
+instance PermsList '[] where 
+  unliftPerms _ = []
+
+instance (KnownSymbol x, PermsList xs) => PermsList (x ': xs) where 
+  unliftPerms _ = T.pack (symbolVal (Proxy :: Proxy x))
+    : unliftPerms (Proxy :: Proxy xs)
+
+-- | Check whether a 'b' is contained in permission list of 'a'
+type family ContainPerm (a :: [Symbol]) (b :: Symbol) where 
+  ContainPerm '[] b = 'False
+  ContainPerm (a ': as) a = 'True
+  ContainPerm (a ': as) b = ContainPerm as b
+
+-- | Check that first set of permissions is subset of second
+type family ConatinAllPerm (a :: [Symbol]) (b :: [Symbol]) where 
+  ConatinAllPerm '[] bs = '[]
+  ConatinAllPerm (a ': as) bs = (ContainPerm bs a) ': (ConatinAllPerm as bs)
+
+-- | Foldl type level list of bools, identicall to 'and'
+type family TAll (a :: [Bool]) :: Bool where 
+  TAll '[] = 'True
+  TAll ('True ': as) = TAll as 
+  TAll ('False ': as) = 'False 
+
+-- | Check that first set of permissions is subset of second, throw error if not
+type PermsSubset (a :: [Symbol]) (b :: [Symbol]) = TAll (ConatinAllPerm a b)
+
+-- | Cast token to permissions that are lower than original one
+--
+-- The cast is safe, the permissions are cheked on compile time.
+downgradeToken' :: 'True ~ PermsSubset ts' ts => Token ts -> Token ts' 
+downgradeToken' = Token . unToken 
+
+-- | Cast token to permissions that are lower than original one.
+--
+-- The cast is safe, the permissions are cheked on compile time.
+downgradeToken :: 'True ~ PermsSubset ts' ts => MToken ts -> MToken ts'
+downgradeToken = fmap downgradeToken'

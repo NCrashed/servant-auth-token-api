@@ -35,11 +35,15 @@ library
     DataKinds
     DeriveGeneric
     FlexibleInstances
+    GeneralizedNewtypeDeriving
     KindSignatures
     OverloadedStrings
+    RankNTypes
+    ScopedTypeVariables
+    TypeFamilies
     TypeOperators
     TypeSynonymInstances
-    
+
 source-repository head
   type:     git
   location: https://github.com/ncrashed/servant-auth-token-api
