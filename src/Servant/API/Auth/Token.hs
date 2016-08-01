@@ -108,7 +108,7 @@ type SimpleToken = Text
 -- | Shortcut for Maybe Token with attached permissions
 type MToken (perms :: [Symbol]) = Maybe (Token perms)
 
--- | Username for login
+-- | User name for login
 type Login = Text 
 -- | Password for login
 type Password = Text
@@ -464,7 +464,7 @@ type AuthGroupsMethod = "group"
 authAPI :: Proxy AuthAPI 
 authAPI = Proxy
 
--- | Permission that allows everthing by default
+-- | Permission that allows everything by default
 adminPerm :: Permission
 adminPerm = "admin"
 
@@ -490,7 +490,12 @@ authOperations = operationsOf $ toSwagger (Proxy :: Proxy AuthAPI)
 
 -- | "Servant.Docs" documentation of the Auth API
 authDocs :: API
-authDocs = docsWithIntros [] (Proxy :: Proxy AuthAPI)
+authDocs = docsWithIntros [intro] (Proxy :: Proxy AuthAPI)
+  where 
+  intro = DocIntro "Authorisation API by token"
+    [ "The API provides stateless way to implement authorisation for RESTful APIs. A user of the API get a token once and can query other methods of server only providing the token until it expires."
+    , "Also the API provides a way to pack users in hierarchy of groups with attached permissions."
+    ]
 
 instance ToSample Word where 
   toSamples _ = samples [0, 4, 8, 15, 16, 23, 42]
