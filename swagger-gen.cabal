@@ -18,9 +18,10 @@ executable auth-token-swagger-gen
   default-language:    Haskell2010
   build-depends:       
       base >= 4.7 && < 5
-    , servant-auth-token-api 
-    , servant-swagger >= 0.1
     , aeson >= 0.11
     , bytestring >= 0.10
     , lens >= 4
+    , servant-auth-token-api 
+    , servant-docs >= 0.7
+    , servant-swagger >= 0.1
     , swagger2

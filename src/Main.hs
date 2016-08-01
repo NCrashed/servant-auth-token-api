@@ -6,6 +6,7 @@ import Data.Aeson
 import Data.Proxy
 import Data.Swagger 
 import Servant.API.Auth.Token 
+import Servant.Docs 
 import Servant.Swagger
 import System.Environment
 
@@ -13,7 +14,7 @@ import qualified Data.ByteString.Lazy as BS
 
 main :: IO ()
 main = do
-  [targetFile] <- getArgs
+  [targetFile, targetMarkdownFile] <- getArgs
   BS.writeFile targetFile $ encode $ toSwagger (Proxy :: Proxy AuthAPI)
     & info.title        .~ "API servant-auth-token-api"
     & info.version      .~ "0.1"
@@ -21,3 +22,4 @@ main = do
     & info.license      ?~ "MIT"
     & host              ?~ "ncrashed.github.io"
     & applyTagsFor authOperations ["Authorisation" & description ?~ "Authorisation operations"]
+  writeFile targetMarkdownFile $ markdown authDocs
