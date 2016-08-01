@@ -8,4 +8,4 @@ The package provides abstract RESTful API for token based authorisation using [s
 
 - servant-auth-token-client (not yet published) - client side implementation using GHCJS and [reflex-dom](https://hackage.haskell.org/package/reflex-dom)
 
-Also you can explore [swagger documentation](https://ncrashed.github.io/servant-auth-token-api/swagger-ui) for the API.
+Also you can explore [swagger documentation](https://ncrashed.github.io/servant-auth-token-api/swagger-ui) for the API and view [markdown version of docs](https://github.com/NCrashed/servant-auth-token-api/blob/gh-pages/docs.markdown).
