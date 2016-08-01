@@ -37,6 +37,10 @@ resolver: lts-6.10
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - '.'
+- location:
+    git: https://github.com/NCrashed/servant-auth-token-api.git
+    commit: 38346374a52ca98b72149ce874d704ed28f00dd4
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps:
