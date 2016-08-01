@@ -67,6 +67,7 @@ module Servant.API.Auth.Token(
 
 import Control.Lens
 import Data.Aeson.WithField  
+import Data.Monoid 
 import Data.Proxy
 import Data.Swagger (Swagger, Operation)
 import Data.Swagger.Internal (SwaggerType(..), _paramSchemaType)
@@ -325,7 +326,7 @@ instance ToCapture (Capture "group-id" UserGroupId) where
   toCapture _ = DocCapture "group-id" "identifier of a user group"
 
 -- | Generic authorization API
-type AuthAPI = "auth" :> (
+type AuthAPI =
        AuthSigninMethod
   :<|> AuthTouchMethod
   :<|> AuthTokenInfoMethod
@@ -343,61 +344,60 @@ type AuthAPI = "auth" :> (
   :<|> AuthPatchGroupMethod
   :<|> AuthDeleteGroupMethod
   :<|> AuthGroupsMethod
-  )
 
 -- | How to get a token, expire of 'Nothing' means 
 -- some default value (server config)
-type AuthSigninMethod = "signin"
+type AuthSigninMethod = "auth" :> "signin"
   :> QueryParam "login" Login 
   :> QueryParam "password" Password 
   :> QueryParam "expire" Seconds
   :> Get '[JSON] (OnlyField "token" SimpleToken)
 
 -- | Client cat expand the token lifetime, no permissions are required
-type AuthTouchMethod = "touch" 
+type AuthTouchMethod = "auth" :> "touch" 
   :> QueryParam "expire" Seconds
   :> TokenHeader '[]
   :> Post '[JSON] ()
 
 -- | Get client info that is binded to the token
-type AuthTokenInfoMethod = "token"
+type AuthTokenInfoMethod = "auth" :> "token"
   :> TokenHeader '[]
   :> Get '[JSON] RespUserInfo
 
 -- | Close session, after call of the method the
 -- token in header is not valid.
-type AuthSignoutMethod = "signout"
+type AuthSignoutMethod = "auth" :> "signout"
   :> TokenHeader '[]
   :> Post '[JSON] ()
 
 -- | Creation of new user, requires 'registerPerm' for token
-type AuthSignupMethod = "signup"
+type AuthSignupMethod = "auth" :> "signup"
   :> ReqBody '[JSON] ReqRegister
   :> TokenHeader '["auth-register"]
   :> Post '[JSON] (OnlyField "user" UserId)
 
 -- | Getting list of all users, requires 'authInfoPerm' for token
-type AuthUsersMethod = "users"
+type AuthUsersMethod = "auth" :> "users"
   :> PageParam
   :> PageSizeParam
   :> TokenHeader '["auth-info"]
   :> Get '[JSON] RespUsersInfo
 
 -- | Getting info about user, requires 'authInfoPerm' for token
-type AuthGetUserMethod = "user"
+type AuthGetUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
   :> TokenHeader '["auth-info"]
   :> Get '[JSON] RespUserInfo
 
 -- | Updating login/email/password, requires 'authUpdatePerm' for token
-type AuthPatchUserMethod = "user"
+type AuthPatchUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
   :> ReqBody '[JSON] PatchUser
   :> TokenHeader '["auth-update"]
   :> Patch '[JSON] ()
 
 -- | Replace user with the user in the body, requires 'authUpdatePerm' for token
-type AuthPutUserMethod = "user"
+type AuthPutUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
   :> ReqBody '[JSON] ReqRegister
   :> TokenHeader '["auth-update"]
@@ -405,7 +405,7 @@ type AuthPutUserMethod = "user"
 
 -- | Delete user from DB, requires 'authDeletePerm' and will cause cascade
 -- deletion, that is your usually want
-type AuthDeleteUserMethod = "user"
+type AuthDeleteUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
   :> TokenHeader '["auth-delete"]
   :> Delete '[JSON] ()
@@ -414,46 +414,46 @@ type AuthDeleteUserMethod = "user"
 -- is called without 'code' parameter. The system sends email with a restore code
 -- to user email or sms (its depends on server). After that a call of the method 
 -- with the code is needed to change password.
-type AuthRestoreMethod = "restore" 
+type AuthRestoreMethod = "auth" :> "restore" 
   :> Capture "user-id" UserId
   :> QueryParam "code" RestoreCode 
   :> QueryParam "password" Password 
   :> Post '[JSON] ()
 
 -- | Getting info about user group, requires 'authInfoPerm' for token
-type AuthGetGroupMethod = "group"
+type AuthGetGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
   :> TokenHeader '["auth-info"]
   :> Get '[JSON] UserGroup
 
 -- | Inserting new user group, requires 'authUpdatePerm' for token
-type AuthPostGroupMethod = "group"
+type AuthPostGroupMethod = "auth" :> "group"
   :> ReqBody '[JSON] UserGroup
   :> TokenHeader '["auth-update"]
   :> Post '[JSON] UserGroupId
 
 -- | Replace info about given user group, requires 'authUpdatePerm' for token
-type AuthPutGroupMethod = "group"
+type AuthPutGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
   :> ReqBody '[JSON] UserGroup
   :> TokenHeader '["auth-update"]
   :> Put '[JSON] ()
 
 -- | Patch info about given user group, requires 'authUpdatePerm' for token
-type AuthPatchGroupMethod = "group"
+type AuthPatchGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
   :> ReqBody '[JSON] PatchUserGroup
   :> TokenHeader '["auth-update"]
   :> Patch '[JSON] ()
 
 -- | Delete all info about given user group, requires 'authDeletePerm' for token
-type AuthDeleteGroupMethod = "group"
+type AuthDeleteGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
   :> TokenHeader '["auth-delete"]
   :> Delete '[JSON] ()
 
 -- | Get list of user groups, requires 'authInfoPerm' for token 
-type AuthGroupsMethod = "group"
+type AuthGroupsMethod = "auth" :> "group"
   :> PageParam
   :> PageSizeParam
   :> TokenHeader '["auth-info"]
@@ -490,12 +490,33 @@ authOperations = operationsOf $ toSwagger (Proxy :: Proxy AuthAPI)
 
 -- | "Servant.Docs" documentation of the Auth API
 authDocs :: API
-authDocs = docsWithIntros [intro] (Proxy :: Proxy AuthAPI)
+authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
   where 
   intro = DocIntro "Authorisation API by token"
     [ "The API provides stateless way to implement authorisation for RESTful APIs. A user of the API get a token once and can query other methods of server only providing the token until it expires."
     , "Also the API provides a way to pack users in hierarchy of groups with attached permissions."
     ]
+  extra = 
+       mkExtra (Proxy :: Proxy AuthSigninMethod) "How to get a token, missing expire means some default value (server config)"
+    <> mkExtra (Proxy :: Proxy AuthTouchMethod) "Client cat expand the token lifetime, no permissions are required"
+    <> mkExtra (Proxy :: Proxy AuthTokenInfoMethod) "Get client info that is binded to the token"
+    <> mkExtra (Proxy :: Proxy AuthSignoutMethod) "Close session, after call of the method the token in header is not valid."
+    <> mkExtra (Proxy :: Proxy AuthSignupMethod) "Creation of new user, requires 'registerPerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthUsersMethod) "Getting list of all users, requires 'authInfoPerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthGetUserMethod) "Getting info about user, requires 'authInfoPerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthPatchUserMethod) "Updating login/email/password, requires 'authUpdatePerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthPutUserMethod) "Replace user with the user in the body, requires 'authUpdatePerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthDeleteUserMethod) "Delete user from DB, requires 'authDeletePerm' and will cause cascade deletion, that is your usually want"
+    <> mkExtra (Proxy :: Proxy AuthRestoreMethod) "Generate new password for user. There is two phases, first, the method is called without 'code' parameter. The system sends email with a restore code to user email or sms (its depends on server). After that a call of the method with the code is needed to change password."
+    <> mkExtra (Proxy :: Proxy AuthGetGroupMethod) "Getting info about user group, requires 'authInfoPerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthPostGroupMethod) "Inserting new user group, requires 'authUpdatePerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthPutGroupMethod) "Replace info about given user group, requires 'authUpdatePerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthPatchGroupMethod) "Patch info about given user group, requires 'authUpdatePerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthDeleteGroupMethod) "Delete all info about given user group, requires 'authDeletePerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthGroupsMethod) "Get list of user groups, requires 'authInfoPerm' for token "
+
+  mkExtra p s = extraInfo p $  
+    defAction & notes <>~ [ DocNote "Description" [s] ]
 
 instance ToSample Word where 
   toSamples _ = samples [0, 4, 8, 15, 16, 23, 42]
