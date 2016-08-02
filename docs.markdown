@@ -86,31 +86,31 @@ Clients must supply the following data
 - 
 
 ```javascript
-0
+{"id":0}
 ```
 
 - 
 
 ```javascript
-4
+{"id":4}
 ```
 
 - 
 
 ```javascript
-8
+{"id":8}
 ```
 
 - 
 
 ```javascript
-15
+{"id":15}
 ```
 
 - 
 
 ```javascript
-16
+{"id":16}
 ```
 
 ## DELETE /auth/group/:group-id
