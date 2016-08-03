@@ -33,9 +33,13 @@ module Servant.API.Auth.Token(
   , authAPI
   , authDocs
   -- ** Token
+  , PermSymbol(..)
   , Token(..)
+  , Token'
   , MToken
+  , MToken'
   , TokenHeader
+  , TokenHeader'
   , SimpleToken
   , PermsList(..)
   , downgradeToken'
@@ -67,6 +71,7 @@ module Servant.API.Auth.Token(
   ) where 
 
 import Control.Lens
+import Data.Aeson.Unit
 import Data.Aeson.WithField  
 import Data.Monoid 
 import Data.Proxy
@@ -88,10 +93,41 @@ import Servant.API.Auth.Token.Pagination
 import Servant.API.Auth.Token.Internal.DeriveJson 
 import Servant.API.Auth.Token.Internal.Schema
 
+instance ToSample Unit where 
+  toSamples _ = singleSample Unit
+
+-- | Type level permission type that allows to 
+-- construct complex permission labels
+data {- kind -} PermSymbol = 
+    PermLabel Symbol 
+  | PermConcat PermSymbol PermSymbol
+
+-- | Convertation of permission symbol into runtim string
+class UnliftPermSymbol (s :: PermSymbol) where 
+  unliftPermSymbol :: Proxy s -> String 
+
+instance KnownSymbol s => UnliftPermSymbol ('PermLabel s) where 
+  unliftPermSymbol _ = symbolVal (Proxy :: Proxy s)
+
+instance (UnliftPermSymbol p1, UnliftPermSymbol p2) => UnliftPermSymbol ('PermConcat p1 p2) where 
+  unliftPermSymbol _ = unliftPermSymbol (Proxy :: Proxy p1)
+    ++ unliftPermSymbol (Proxy :: Proxy p2)
+
+-- | Helper type family to wrap all symbols into 'PermLabel'
+type family PlainPerms (p :: [Symbol]) :: [PermSymbol] where 
+  PlainPerms '[] = '[]
+  PlainPerms (s ': ss) = 'PermLabel s ': PlainPerms ss
+
 -- | Token is simple string marked by permissions that are expected
 -- from the token to pass guarding functions.
-newtype Token (perms :: [Symbol]) = Token { unToken :: Text }
+newtype Token (perms :: [PermSymbol]) = Token { unToken :: Text }
   deriving (Eq, Show)
+
+-- | Token is simple string marked by permissions that are expected
+-- from the token to pass guarding functions.
+--
+-- Simplified version that takes plain symbols as permissions.
+type Token' (perms :: [Symbol]) = Token (PlainPerms perms)
 
 instance ToParamSchema (Token perms) where 
   toParamSchema _ = mempty { _paramSchemaType = SwaggerString }
@@ -109,7 +145,12 @@ instance ToSample (Token perms) where
 -- | Token that doesn't have attached compile-time permissions
 type SimpleToken = Text 
 -- | Shortcut for Maybe Token with attached permissions
-type MToken (perms :: [Symbol]) = Maybe (Token perms)
+type MToken (perms :: [PermSymbol]) = Maybe (Token perms)
+
+-- | Shortcut for Maybe Token with attached permissions
+--
+-- Simplified version that takes plain symbols as permissions.
+type MToken' (perms :: [Symbol]) = MToken (PlainPerms perms)
 
 -- | User name for login
 type Login = Text 
@@ -126,8 +167,14 @@ type RestoreCode = Text
 
 -- | Token header that we require for authorization marked 
 -- by permissions that are expected from the token to pass guarding functions.
-type TokenHeader (perms :: [Symbol]) = 
+type TokenHeader (perms :: [PermSymbol]) = 
   Header "Authorization" (Token perms)
+
+-- | Token header that we require for authorization marked 
+-- by permissions that are expected from the token to pass guarding functions.
+--
+-- Simplified version that takes plain symbols as permissions.
+type TokenHeader' (perms :: [Symbol]) = TokenHeader (PlainPerms perms)
 
 -- | Id of user that is used in the API
 type UserId = Word 
@@ -359,7 +406,7 @@ type AuthSigninMethod = "auth" :> "signin"
 type AuthTouchMethod = "auth" :> "touch" 
   :> QueryParam "expire" Seconds
   :> TokenHeader '[]
-  :> Post '[JSON] ()
+  :> Post '[JSON] Unit
 
 -- | Get client info that is binded to the token
 type AuthTokenInfoMethod = "auth" :> "token"
@@ -370,47 +417,47 @@ type AuthTokenInfoMethod = "auth" :> "token"
 -- token in header is not valid.
 type AuthSignoutMethod = "auth" :> "signout"
   :> TokenHeader '[]
-  :> Post '[JSON] ()
+  :> Post '[JSON] Unit
 
 -- | Creation of new user, requires 'registerPerm' for token
 type AuthSignupMethod = "auth" :> "signup"
   :> ReqBody '[JSON] ReqRegister
-  :> TokenHeader '["auth-register"]
+  :> TokenHeader' '["auth-register"]
   :> Post '[JSON] (OnlyField "user" UserId)
 
 -- | Getting list of all users, requires 'authInfoPerm' for token
 type AuthUsersMethod = "auth" :> "users"
   :> PageParam
   :> PageSizeParam
-  :> TokenHeader '["auth-info"]
+  :> TokenHeader' '["auth-info"]
   :> Get '[JSON] RespUsersInfo
 
 -- | Getting info about user, requires 'authInfoPerm' for token
 type AuthGetUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
-  :> TokenHeader '["auth-info"]
+  :> TokenHeader' '["auth-info"]
   :> Get '[JSON] RespUserInfo
 
 -- | Updating login/email/password, requires 'authUpdatePerm' for token
 type AuthPatchUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
   :> ReqBody '[JSON] PatchUser
-  :> TokenHeader '["auth-update"]
-  :> Patch '[JSON] ()
+  :> TokenHeader' '["auth-update"]
+  :> Patch '[JSON] Unit
 
 -- | Replace user with the user in the body, requires 'authUpdatePerm' for token
 type AuthPutUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
   :> ReqBody '[JSON] ReqRegister
-  :> TokenHeader '["auth-update"]
-  :> Put '[JSON] ()
+  :> TokenHeader' '["auth-update"]
+  :> Put '[JSON] Unit
 
 -- | Delete user from DB, requires 'authDeletePerm' and will cause cascade
 -- deletion, that is your usually want
 type AuthDeleteUserMethod = "auth" :> "user"
   :> Capture "user-id" UserId 
-  :> TokenHeader '["auth-delete"]
-  :> Delete '[JSON] ()
+  :> TokenHeader' '["auth-delete"]
+  :> Delete '[JSON] Unit
 
 -- | Generate new password for user. There is two phases, first, the method
 -- is called without 'code' parameter. The system sends email with a restore code
@@ -420,45 +467,45 @@ type AuthRestoreMethod = "auth" :> "restore"
   :> Capture "user-id" UserId
   :> QueryParam "code" RestoreCode 
   :> QueryParam "password" Password 
-  :> Post '[JSON] ()
+  :> Post '[JSON] Unit
 
 -- | Getting info about user group, requires 'authInfoPerm' for token
 type AuthGetGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
-  :> TokenHeader '["auth-info"]
+  :> TokenHeader' '["auth-info"]
   :> Get '[JSON] UserGroup
 
 -- | Inserting new user group, requires 'authUpdatePerm' for token
 type AuthPostGroupMethod = "auth" :> "group"
   :> ReqBody '[JSON] UserGroup
-  :> TokenHeader '["auth-update"]
+  :> TokenHeader' '["auth-update"]
   :> Post '[JSON] (OnlyId UserGroupId)
 
 -- | Replace info about given user group, requires 'authUpdatePerm' for token
 type AuthPutGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
   :> ReqBody '[JSON] UserGroup
-  :> TokenHeader '["auth-update"]
-  :> Put '[JSON] ()
+  :> TokenHeader' '["auth-update"]
+  :> Put '[JSON] Unit
 
 -- | Patch info about given user group, requires 'authUpdatePerm' for token
 type AuthPatchGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
   :> ReqBody '[JSON] PatchUserGroup
-  :> TokenHeader '["auth-update"]
-  :> Patch '[JSON] ()
+  :> TokenHeader' '["auth-update"]
+  :> Patch '[JSON] Unit
 
 -- | Delete all info about given user group, requires 'authDeletePerm' for token
 type AuthDeleteGroupMethod = "auth" :> "group"
   :> Capture "group-id" UserGroupId
-  :> TokenHeader '["auth-delete"]
-  :> Delete '[JSON] ()
+  :> TokenHeader' '["auth-delete"]
+  :> Delete '[JSON] Unit
 
 -- | Get list of user groups, requires 'authInfoPerm' for token 
 type AuthGroupsMethod = "auth" :> "group"
   :> PageParam
   :> PageSizeParam
-  :> TokenHeader '["auth-info"]
+  :> TokenHeader' '["auth-info"]
   :> Get '[JSON] (PagedList UserGroupId UserGroup)
 
 -- | Proxy type for auth API, used to pass the type-level info into 
@@ -543,13 +590,13 @@ instance (KnownSymbol x, PermsList xs) => PermsList (x ': xs) where
     : unliftPerms (Proxy :: Proxy xs)
 
 -- | Check whether a 'b' is contained in permission list of 'a'
-type family ContainPerm (a :: [Symbol]) (b :: Symbol) where 
+type family ContainPerm (a :: [PermSymbol]) (b :: PermSymbol) where 
   ContainPerm '[] b = 'False
   ContainPerm (a ': as) a = 'True
   ContainPerm (a ': as) b = ContainPerm as b
 
 -- | Check that first set of permissions is subset of second
-type family ConatinAllPerm (a :: [Symbol]) (b :: [Symbol]) where 
+type family ConatinAllPerm (a :: [PermSymbol]) (b :: [PermSymbol]) where 
   ConatinAllPerm '[] bs = '[]
   ConatinAllPerm (a ': as) bs = (ContainPerm bs a) ': (ConatinAllPerm as bs)
 
@@ -560,7 +607,7 @@ type family TAll (a :: [Bool]) :: Bool where
   TAll ('False ': as) = 'False 
 
 -- | Check that first set of permissions is subset of second, throw error if not
-type PermsSubset (a :: [Symbol]) (b :: [Symbol]) = TAll (ConatinAllPerm a b)
+type PermsSubset (a :: [PermSymbol]) (b :: [PermSymbol]) = TAll (ConatinAllPerm a b)
 
 -- | Cast token to permissions that are lower than original one
 --
