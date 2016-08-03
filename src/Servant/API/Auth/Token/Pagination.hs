@@ -20,8 +20,12 @@ module Servant.API.Auth.Token.Pagination(
   ) where 
 
 import Data.Aeson.WithField 
+import Data.Monoid
 import Data.Proxy 
 import Data.Swagger
+import Data.Swagger.Internal.Schema
+import Data.Text (pack)
+import Data.Typeable
 import GHC.Generics 
 import Servant.API
 import Servant.API.Auth.Token.Internal.DeriveJson 
@@ -52,9 +56,14 @@ data PagedList i a = PagedList {
 } deriving (Generic, Show)
 $(deriveJSON (derivePrefix "pagedList") ''PagedList)
 
-instance (ToSchema i, ToSchema a) => ToSchema (PagedList i a) where 
-  declareNamedSchema = genericDeclareNamedSchema $
-    schemaOptionsDropPrefix "pagedList"
+instance (Typeable i, Typeable a, ToSchema i, ToSchema a) => ToSchema (PagedList i a) where 
+  declareNamedSchema p = do
+    s <- genericDeclareNamedSchema (schemaOptionsDropPrefix "pagedList") p
+    return $ rename nm s
+    where 
+    nm = Just $ "PagedList " <> iname <> " " <> aname
+    iname = pack . show $ typeRep (Proxy :: Proxy i)
+    aname = pack . show $ typeRep (Proxy :: Proxy a)
 
 instance (ToSample i, ToSample a) => ToSample (PagedList i a) where
   toSamples _ = samples $ [s $ toSamples (Proxy :: Proxy (WithId i a))]

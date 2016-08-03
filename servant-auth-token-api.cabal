@@ -1,5 +1,5 @@
 name:                servant-auth-token-api
-version:             0.1.0.1
+version:             0.1.1.0
 synopsis:            Servant based API for token based authorisation
 description:         Please see README.md
 homepage:            https://github.com/ncrashed/servant-auth-token-api#readme
@@ -12,6 +12,7 @@ category:            Web
 build-type:          Simple
 extra-source-files:
   README.md
+  CHANGELOG.md
 cabal-version:       >=1.10
 
 library
