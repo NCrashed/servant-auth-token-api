@@ -64,12 +64,6 @@ module Servant.API.Auth.Token(
   , authDeletePerm
   -- * Swagger helpers
   , authOperations
-  -- * Reexports
-  , PageParam
-  , Page
-  , PageSizeParam
-  , PageSize
-  , PagedList(..)
   ) where 
 
 import Control.Lens
