@@ -65,7 +65,11 @@ module Servant.API.Auth.Token(
   -- * Swagger helpers
   , authOperations
   -- * Reexports
-  , module Reexport
+    PageParam
+  , Page
+  , PageSizeParam
+  , PageSize
+  , PagedList(..)
   ) where 
 
 import Control.Lens
@@ -86,7 +90,7 @@ import Servant.Swagger
 import Data.Text (Text)
 import qualified Data.Text as T 
 
-import Servant.API.Auth.Token.Pagination as Reexport
+import Servant.API.Auth.Token.Pagination
 import Servant.API.Auth.Token.Internal.DeriveJson 
 import Servant.API.Auth.Token.Internal.Schema
 
