@@ -533,6 +533,7 @@ instance ToSample () where
   toSamples _ = singleSample ()
 #endif
 
+-- | Unlifting compile-time permissions into list of run-time permissions
 class PermsList (a :: [Symbol]) where 
   unliftPerms :: forall proxy . proxy a -> [Permission]
 
