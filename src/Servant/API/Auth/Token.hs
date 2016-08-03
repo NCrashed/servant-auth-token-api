@@ -65,7 +65,7 @@ module Servant.API.Auth.Token(
   -- * Swagger helpers
   , authOperations
   -- * Reexports
-    PageParam
+  , PageParam
   , Page
   , PageSizeParam
   , PageSize
