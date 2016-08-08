@@ -579,14 +579,14 @@ instance ToSample () where
 #endif
 
 -- | Unlifting compile-time permissions into list of run-time permissions
-class PermsList (a :: [Symbol]) where 
+class PermsList (a :: [PermSymbol]) where 
   unliftPerms :: forall proxy . proxy a -> [Permission]
 
 instance PermsList '[] where 
   unliftPerms _ = []
 
-instance (KnownSymbol x, PermsList xs) => PermsList (x ': xs) where 
-  unliftPerms _ = T.pack (symbolVal (Proxy :: Proxy x))
+instance (UnliftPermSymbol x, PermsList xs) => PermsList (x ': xs) where 
+  unliftPerms _ = T.pack (unliftPermSymbol (Proxy :: Proxy x))
     : unliftPerms (Proxy :: Proxy xs)
 
 -- | Check whether a 'b' is contained in permission list of 'a'
