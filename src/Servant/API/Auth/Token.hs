@@ -32,8 +32,12 @@ module Servant.API.Auth.Token(
   , AuthGroupsMethod
   , authAPI
   , authDocs
-  -- ** Token
+  -- ** Permission symbol
   , PermSymbol(..)
+  , UnliftPermSymbol(..)
+  , PermsList(..)
+  , PlainPerms
+  -- ** Token
   , Token(..)
   , Token'
   , MToken
@@ -41,7 +45,6 @@ module Servant.API.Auth.Token(
   , TokenHeader
   , TokenHeader'
   , SimpleToken
-  , PermsList(..)
   , downgradeToken'
   , downgradeToken
   -- ** User
