@@ -444,7 +444,7 @@ type AuthSigninMethod = "auth" :> "signin"
 --
 -- * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
 --
--- * Server responds with auth roken.
+-- * Server responds with auth token.
 --
 -- * Client uses the token with other requests as authorisation
 -- header
@@ -470,7 +470,7 @@ type AuthSigninGetCodeMethod = "auth" :> "signin"
 --
 -- * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
 --
--- * Server responds with auth roken.
+-- * Server responds with auth token.
 --
 -- * Client uses the token with other requests as authorisation
 -- header
@@ -484,6 +484,7 @@ type AuthSigninGetCodeMethod = "auth" :> "signin"
 type AuthSigninPostCodeMethod = "auth" :> "signin"
   :> QueryParam "login" Login 
   :> QueryParam "code" SingleUseCode
+  :> QueryParam "expire" Seconds
   :> Post '[JSON] (OnlyField "token" SimpleToken)
 
 -- | Client cat expand the token lifetime, no permissions are required
@@ -684,7 +685,7 @@ authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
    
     * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
    
-    * Server responds with auth roken.
+    * Server responds with auth token.
    
     * Client uses the token with other requests as authorisation
     header
