@@ -1,3 +1,8 @@
+0.3.0.0
+=======
+
+* Add single use code authorisation.
+
 0.2.1.0
 =======
 

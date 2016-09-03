@@ -1,6 +1,8 @@
-{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-|
 Module      : Servant.API.Auth.Token
 Description : API for token based authorisation.
@@ -14,6 +16,8 @@ module Servant.API.Auth.Token(
   -- * API specs
     AuthAPI
   , AuthSigninMethod
+  , AuthSigninGetCodeMethod
+  , AuthSigninPostCodeMethod
   , AuthTouchMethod
   , AuthTokenInfoMethod
   , AuthSignoutMethod
@@ -55,6 +59,7 @@ module Servant.API.Auth.Token(
   , Permission
   , Seconds
   , RestoreCode
+  , SingleUseCode
   , ReqRegister(..)
   , RespUserInfo(..)
   , PatchUser(..)
@@ -88,6 +93,7 @@ import GHC.TypeLits
 import Servant.API
 import Servant.Docs 
 import Servant.Swagger
+import Text.RawString.QQ
 
 import Data.Text (Text)
 import qualified Data.Text as T 
@@ -167,6 +173,9 @@ type Permission = Text
 type Seconds = Word
 -- | Special tag for password restore 
 type RestoreCode = Text 
+-- | Single use code used for authorisation via 'AuthSigninGetCodeMethod' and
+-- 'AuthSigninPostCodeMethod' endpoints
+type SingleUseCode = Text 
 
 -- | Token header that we require for authorization marked 
 -- by permissions that are expected from the token to pass guarding functions.
@@ -380,6 +389,8 @@ instance ToCapture (Capture "group-id" UserGroupId) where
 -- | Generic authorization API
 type AuthAPI =
        AuthSigninMethod
+  :<|> AuthSigninGetCodeMethod
+  :<|> AuthSigninPostCodeMethod
   :<|> AuthTouchMethod
   :<|> AuthTokenInfoMethod
   :<|> AuthSignoutMethod
@@ -398,12 +409,82 @@ type AuthAPI =
   :<|> AuthGroupsMethod
 
 -- | How to get a token, expire of 'Nothing' means 
--- some default value (server config)
+-- some default value (server config).
+--
+-- Logic of authorisation via this method is:
+--
+-- * Client sends GET request to the endpoint with
+-- user specified login and password and optional expire
+--
+-- * Server responds with token or error
+--
+-- * Client uses the token with other requests as authorisation
+-- header
+--
+-- * Client can extend lifetime of token by periodically pinging
+-- of 'AuthTouchMethod' endpoint
+--
+-- * Client can invalidate token instantly by 'AuthSignoutMethod'
+--
+-- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
 type AuthSigninMethod = "auth" :> "signin"
   :> QueryParam "login" Login 
   :> QueryParam "password" Password 
   :> QueryParam "expire" Seconds
   :> Get '[JSON] (OnlyField "token" SimpleToken)
+
+-- | Authorisation via code of single usage.
+--
+-- Logic of authorisation via this method is:
+-- 
+-- * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
+--
+-- * Server generates single use token and sends it via
+--   SMS or email (server specific implementation)
+--
+-- * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
+--
+-- * Server responds with auth roken.
+--
+-- * Client uses the token with other requests as authorisation
+-- header
+--
+-- * Client can extend lifetime of token by periodically pinging
+-- of 'AuthTouchMethod' endpoint
+--
+-- * Client can invalidate token instantly by 'AuthSignoutMethod'
+--
+-- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
+type AuthSigninGetCodeMethod = "auth" :> "signin"
+  :> QueryParam "login" Login 
+  :> Get '[JSON] Unit
+
+-- | Authorisation via code of single usage.
+--
+-- Logic of authorisation via this method is:
+-- 
+-- * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
+--
+-- * Server generates single use token and sends it via
+--   SMS or email (server specific implementation)
+--
+-- * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
+--
+-- * Server responds with auth roken.
+--
+-- * Client uses the token with other requests as authorisation
+-- header
+--
+-- * Client can extend lifetime of token by periodically pinging
+-- of 'AuthTouchMethod' endpoint
+--
+-- * Client can invalidate token instantly by 'AuthSignoutMethod'
+--
+-- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
+type AuthSigninPostCodeMethod = "auth" :> "signin"
+  :> QueryParam "login" Login 
+  :> QueryParam "code" SingleUseCode
+  :> Post '[JSON] (OnlyField "token" SimpleToken)
 
 -- | Client cat expand the token lifetime, no permissions are required
 type AuthTouchMethod = "auth" :> "touch" 
@@ -549,7 +630,9 @@ authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
     , "Also the API provides a way to pack users in hierarchy of groups with attached permissions."
     ]
   extra = 
-       mkExtra (Proxy :: Proxy AuthSigninMethod) "How to get a token, missing expire means some default value (server config)"
+       mkExtra' (Proxy :: Proxy AuthSigninMethod) ["How to get a token, missing expire means some default value (server config).", simpleAuthDescr]
+    <> mkExtra' (Proxy :: Proxy AuthSigninGetCodeMethod) ["Authorisation via codes of single usage, that are sended to user via different channel of communication.", singleUseAuthDescr]
+    <> mkExtra' (Proxy :: Proxy AuthSigninPostCodeMethod) ["Authorisation via codes of single usage, that are sended to user via different channel of communication.", singleUseAuthDescr]
     <> mkExtra (Proxy :: Proxy AuthTouchMethod) "Client cat expand the token lifetime, no permissions are required"
     <> mkExtra (Proxy :: Proxy AuthTokenInfoMethod) "Get client info that is binded to the token"
     <> mkExtra (Proxy :: Proxy AuthSignoutMethod) "Close session, after call of the method the token in header is not valid."
@@ -569,6 +652,50 @@ authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
 
   mkExtra p s = extraInfo p $  
     defAction & notes <>~ [ DocNote "Description" [s] ]
+  mkExtra' p ss = extraInfo p $  
+    defAction & notes <>~ [ DocNote "Description" ss ]
+
+  simpleAuthDescr = [r|
+    Logic of authorisation via login and password method is:
+
+    * Client sends GET request to the endpoint with
+    user specified login and password and optional expire
+   
+    * Server responds with token or error
+   
+    * Client uses the token with other requests as authorisation
+    header
+   
+    * Client can extend lifetime of token by periodically pinging
+    of 'AuthTouchMethod' endpoint
+   
+    * Client can invalidate token instantly by 'AuthSignoutMethod'
+   
+    * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
+    |]
+
+  singleUseAuthDescr = [r|
+    Logic of authorisation via single use code method is:
+    
+    * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
+   
+    * Server generates single use token and sends it via
+      SMS or email (server specific implementation)
+   
+    * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
+   
+    * Server responds with auth roken.
+   
+    * Client uses the token with other requests as authorisation
+    header
+   
+    * Client can extend lifetime of token by periodically pinging
+    of 'AuthTouchMethod' endpoint
+   
+    * Client can invalidate token instantly by 'AuthSignoutMethod'
+   
+    * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
+    |]
 
 instance ToSample Word where 
   toSamples _ = samples [0, 4, 8, 15, 16, 23, 42]
