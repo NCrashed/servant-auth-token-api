@@ -424,33 +424,6 @@ How to get a token, missing expire means some default value (server config).
     * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
     
 
-#### Description
-
-Authorisation via codes of single usage, that are sended to user via different channel of communication.
-
-
-    Logic of authorisation via single use code method is:
-    
-    * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
-   
-    * Server generates single use token and sends it via
-      SMS or email (server specific implementation)
-   
-    * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
-   
-    * Server responds with auth token.
-   
-    * Client uses the token with other requests as authorisation
-    header
-   
-    * Client can extend lifetime of token by periodically pinging
-    of 'AuthTouchMethod' endpoint
-   
-    * Client can invalidate token instantly by 'AuthSignoutMethod'
-   
-    * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
-    
-
 #### Authentication
 
 
@@ -500,7 +473,65 @@ Clients must supply the following data
 {"token":"magic"}
 ```
 
-## POST /auth/signin
+## GET /auth/signin/code
+
+#### Description
+
+Authorisation via codes of single usage, that are sended to user via different channel of communication.
+
+
+    Logic of authorisation via single use code method is:
+    
+    * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
+   
+    * Server generates single use token and sends it via
+      SMS or email (server specific implementation)
+   
+    * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
+   
+    * Server responds with auth token.
+   
+    * Client uses the token with other requests as authorisation
+    header
+   
+    * Client can extend lifetime of token by periodically pinging
+    of 'AuthTouchMethod' endpoint
+   
+    * Client can invalidate token instantly by 'AuthSignoutMethod'
+   
+    * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
+    
+
+#### Authentication
+
+
+
+Clients must supply the following data
+
+
+#### GET Parameters:
+
+- login
+     - **Values**: *ncrashed, buddy*
+     - **Description**: Any valid login for user
+
+
+#### Response:
+
+- Status code 200
+- Headers: []
+
+- Supported content types are:
+
+    - `application/json`
+
+- Response body as below.
+
+```javascript
+{}
+```
+
+## POST /auth/signin/code
 
 #### Description
 
