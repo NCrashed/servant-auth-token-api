@@ -1,3 +1,8 @@
+0.3.1.0
+=======
+
+* Fix overlaying bug with singe use code authorisation.
+
 0.3.0.0
 =======
 

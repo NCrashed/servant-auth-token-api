@@ -461,7 +461,7 @@ type AuthSigninMethod = "auth" :> "signin"
 -- * Client can invalidate token instantly by 'AuthSignoutMethod'
 --
 -- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
-type AuthSigninGetCodeMethod = "auth" :> "signin"
+type AuthSigninGetCodeMethod = "auth" :> "signin" :> "code"
   :> QueryParam "login" Login 
   :> Get '[JSON] Unit
 
@@ -487,7 +487,7 @@ type AuthSigninGetCodeMethod = "auth" :> "signin"
 -- * Client can invalidate token instantly by 'AuthSignoutMethod'
 --
 -- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
-type AuthSigninPostCodeMethod = "auth" :> "signin"
+type AuthSigninPostCodeMethod = "auth" :> "signin" :> "code"
   :> QueryParam "login" Login 
   :> QueryParam "code" SingleUseCode
   :> QueryParam "expire" Seconds
