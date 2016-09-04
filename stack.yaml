@@ -39,7 +39,7 @@ packages:
 - '.'
 - location:
     git: https://github.com/NCrashed/servant-auth-token-api.git
-    commit: 073e264807f668d54e0cee161963166330abf9c3
+    commit: d011f7bfecd18d07ff67ce9f67f8741e110a2719
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
