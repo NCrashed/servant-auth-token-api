@@ -1,6 +1,10 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
+#ifdef FLAT_SYMBOLS
+{-# LANGUAGE TypeInType #-}
+{-# LANGUAGE UndecidableInstances #-}
+#endif
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 #if __GLASGOW_HASKELL__ >= 800
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
@@ -40,7 +44,11 @@ module Servant.API.Auth.Token(
   , authAPI
   , authDocs
   -- ** Permission symbol
+#ifdef FLAT_SYMBOLS
+  , PermSymbol
+#else
   , PermSymbol(..)
+#endif
   , UnliftPermSymbol(..)
   , PermsList(..)
   , PlainPerms
@@ -79,56 +87,75 @@ module Servant.API.Auth.Token(
   , authDeletePerm
   -- * Swagger helpers
   , authOperations
-  ) where 
+  ) where
 
 import Control.Lens
 import Data.Aeson.Unit
-import Data.Aeson.WithField  
-import Data.Monoid 
+import Data.Aeson.WithField
+import Data.Monoid
 import Data.Proxy
 import Data.Swagger (Swagger, Operation)
 import Data.Swagger.Internal (SwaggerType(..), _paramSchemaType)
 import Data.Swagger.Internal.ParamSchema
 import Data.Swagger.Internal.Schema
 import Data.Swagger.Operation
-import GHC.Generics 
+import GHC.Generics
 import GHC.TypeLits
 import Servant.API
-import Servant.Docs 
+import Servant.Docs
 import Servant.Swagger
 import Text.RawString.QQ
 
 import Data.Text (Text)
-import qualified Data.Text as T 
+import qualified Data.Text as T
 
 import Servant.API.Auth.Token.Pagination
-import Servant.API.Auth.Token.Internal.DeriveJson 
+import Servant.API.Auth.Token.Internal.DeriveJson
 import Servant.API.Auth.Token.Internal.Schema
 
-instance ToSample Unit where 
+instance ToSample Unit where
   toSamples _ = singleSample Unit
 
--- | Type level permission type that allows to 
+-- Simplified version that doesn't consume GBs of RAM
+#ifdef FLAT_SYMBOLS
+-- | Type level permission type that is simple 'Symbol' tag
+type {- kind -} PermSymbol = Symbol
+
+-- | Convertation of permission symbol into runtime string
+class UnliftPermSymbol (s :: PermSymbol) where
+  unliftPermSymbol :: Proxy s -> String
+
+instance KnownSymbol s => UnliftPermSymbol s where
+  unliftPermSymbol _ = symbolVal (Proxy :: Proxy s)
+
+-- | Helper type family to wrap all symbols, with flat symbols this is id
+-- function
+type family PlainPerms (p :: [Symbol]) :: [PermSymbol] where
+  PlainPerms a = a
+
+#else
+-- | Type level permission type that allows to
 -- construct complex permission labels
-data {- kind -} PermSymbol = 
-    PermLabel Symbol 
+data {- kind -} PermSymbol =
+    PermLabel Symbol
   | PermConcat PermSymbol PermSymbol
 
 -- | Convertation of permission symbol into runtim string
-class UnliftPermSymbol (s :: PermSymbol) where 
-  unliftPermSymbol :: Proxy s -> String 
+class UnliftPermSymbol (s :: PermSymbol) where
+  unliftPermSymbol :: Proxy s -> String
 
-instance KnownSymbol s => UnliftPermSymbol ('PermLabel s) where 
+instance KnownSymbol s => UnliftPermSymbol ('PermLabel s) where
   unliftPermSymbol _ = symbolVal (Proxy :: Proxy s)
 
-instance (UnliftPermSymbol p1, UnliftPermSymbol p2) => UnliftPermSymbol ('PermConcat p1 p2) where 
+instance (UnliftPermSymbol p1, UnliftPermSymbol p2) => UnliftPermSymbol ('PermConcat p1 p2) where
   unliftPermSymbol _ = unliftPermSymbol (Proxy :: Proxy p1)
     ++ unliftPermSymbol (Proxy :: Proxy p2)
 
 -- | Helper type family to wrap all symbols into 'PermLabel'
-type family PlainPerms (p :: [Symbol]) :: [PermSymbol] where 
+type family PlainPerms (p :: [Symbol]) :: [PermSymbol] where
   PlainPerms '[] = '[]
   PlainPerms (s ': ss) = 'PermLabel s ': PlainPerms ss
+#endif
 
 -- | Token is simple string marked by permissions that are expected
 -- from the token to pass guarding functions.
@@ -141,13 +168,13 @@ newtype Token (perms :: [PermSymbol]) = Token { unToken :: Text }
 -- Simplified version that takes plain symbols as permissions.
 type Token' (perms :: [Symbol]) = Token (PlainPerms perms)
 
-instance ToParamSchema (Token perms) where 
+instance ToParamSchema (Token perms) where
   toParamSchema _ = mempty { _paramSchemaType = SwaggerString }
 
-instance FromHttpApiData (Token perms) where 
+instance FromHttpApiData (Token perms) where
   parseUrlPiece = fmap Token . parseUrlPiece
 
-instance ToHttpApiData (Token perms) where 
+instance ToHttpApiData (Token perms) where
   toUrlPiece = toUrlPiece . unToken
 
 instance ToSample (Token perms) where
@@ -155,7 +182,7 @@ instance ToSample (Token perms) where
     where s = Token "123e4567-e89b-12d3-a456-426655440000"
 
 -- | Token that doesn't have attached compile-time permissions
-type SimpleToken = Text 
+type SimpleToken = Text
 -- | Shortcut for Maybe Token with attached permissions
 type MToken (perms :: [PermSymbol]) = Maybe (Token perms)
 
@@ -165,55 +192,55 @@ type MToken (perms :: [PermSymbol]) = Maybe (Token perms)
 type MToken' (perms :: [Symbol]) = MToken (PlainPerms perms)
 
 -- | User name for login
-type Login = Text 
+type Login = Text
 -- | Password for login
 type Password = Text
 -- | User email
-type Email = Text 
+type Email = Text
 -- | Special tag for a permission that a user has
-type Permission = Text 
+type Permission = Text
 -- | Amount of seconds
 type Seconds = Word
--- | Special tag for password restore 
-type RestoreCode = Text 
+-- | Special tag for password restore
+type RestoreCode = Text
 -- | Single use code used for authorisation via 'AuthSigninGetCodeMethod' and
 -- 'AuthSigninPostCodeMethod' endpoints
-type SingleUseCode = Text 
+type SingleUseCode = Text
 
--- | Token header that we require for authorization marked 
+-- | Token header that we require for authorization marked
 -- by permissions that are expected from the token to pass guarding functions.
-type TokenHeader (perms :: [PermSymbol]) = 
+type TokenHeader (perms :: [PermSymbol]) =
   Header "Authorization" (Token perms)
 
--- | Token header that we require for authorization marked 
+-- | Token header that we require for authorization marked
 -- by permissions that are expected from the token to pass guarding functions.
 --
 -- Simplified version that takes plain symbols as permissions.
 type TokenHeader' (perms :: [Symbol]) = TokenHeader (PlainPerms perms)
 
 -- | Id of user that is used in the API
-type UserId = Word 
+type UserId = Word
 
 -- | Id of user group
-type UserGroupId = Word 
+type UserGroupId = Word
 
 -- | Request body for user registration
 data ReqRegister = ReqRegister {
-  reqRegLogin :: !Login 
-, reqRegPassword :: !Password 
-, reqRegEmail :: !Email 
+  reqRegLogin :: !Login
+, reqRegPassword :: !Password
+, reqRegEmail :: !Email
 , reqRegPermissions :: ![Permission]
 , reqRegGroups :: !(Maybe [UserGroupId])
 } deriving (Generic, Show)
 $(deriveJSON (derivePrefix "reqReg") ''ReqRegister)
 
-instance ToSchema ReqRegister where 
+instance ToSchema ReqRegister where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "reqReg"
 
 instance ToSample ReqRegister where
   toSamples _ = singleSample s
-    where 
+    where
     s = ReqRegister {
         reqRegLogin = "ncrashed"
       , reqRegPassword = "mydogishappy"
@@ -225,20 +252,20 @@ instance ToSample ReqRegister where
 -- | Response with user info
 data RespUserInfo = RespUserInfo {
   respUserId :: !UserId
-, respUserLogin :: !Login 
-, respUserEmail :: !Email 
+, respUserLogin :: !Login
+, respUserEmail :: !Email
 , respUserPermissions :: ![Permission]
 , respUserGroups :: ![UserGroupId]
 } deriving (Generic, Show)
 $(deriveJSON (derivePrefix "respUser") ''RespUserInfo)
 
-instance ToSchema RespUserInfo where 
+instance ToSchema RespUserInfo where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "respUser"
 
 instance ToSample RespUserInfo where
   toSamples _ = singleSample s
-    where 
+    where
     s = RespUserInfo {
         respUserId = 42
       , respUserLogin = "ncrashed"
@@ -250,17 +277,17 @@ instance ToSample RespUserInfo where
 -- | Response with users info and pagination
 data RespUsersInfo = RespUsersInfo {
   respUsersItems :: ![RespUserInfo]
-, respUsersPages :: !Word 
+, respUsersPages :: !Word
 } deriving (Generic, Show)
 $(deriveJSON (derivePrefix "respUsers") ''RespUsersInfo)
 
-instance ToSchema RespUsersInfo where 
+instance ToSchema RespUsersInfo where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "respUsers"
 
 instance ToSample RespUsersInfo where
   toSamples _ = singleSample s
-    where 
+    where
     s = RespUsersInfo [u] 1
     u = RespUserInfo {
         respUserId = 42
@@ -280,13 +307,13 @@ data PatchUser = PatchUser {
 } deriving (Generic, Show)
 $(deriveJSON (derivePrefix "patchUser") ''PatchUser)
 
-instance ToSchema PatchUser where 
+instance ToSchema PatchUser where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "patchUser"
 
 instance ToSample PatchUser where
   toSamples _ = samples [s1, s2, s3]
-    where 
+    where
     s1 = PatchUser {
         patchUserLogin = Just "nusicrashed"
       , patchUserPassword = Just "mycatishappy"
@@ -314,20 +341,20 @@ instance ToSample PatchUser where
 --
 -- Also a group hierarchy can be formed.
 data UserGroup = UserGroup {
-  userGroupName :: !Text 
+  userGroupName :: !Text
 , userGroupUsers :: ![UserId]
 , userGroupPermissions :: ![Permission]
 , userGroupParent :: !(Maybe UserGroupId)
 } deriving (Generic, Show)
 $(deriveJSON (derivePrefix "userGroup") ''UserGroup)
 
-instance ToSchema UserGroup where 
+instance ToSchema UserGroup where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "userGroup"
 
 instance ToSample UserGroup where
   toSamples _ = singleSample s
-    where 
+    where
     s = UserGroup {
         userGroupName = "moderators"
       , userGroupUsers = [0, 42, 3]
@@ -346,13 +373,13 @@ data PatchUserGroup = PatchUserGroup {
 } deriving (Generic, Show)
 $(deriveJSON (derivePrefix "patchUserGroup") ''PatchUserGroup)
 
-instance ToSchema PatchUserGroup where 
+instance ToSchema PatchUserGroup where
   declareNamedSchema = genericDeclareNamedSchema $
     schemaOptionsDropPrefix "patchUserGroup"
 
 instance ToSample PatchUserGroup where
   toSamples _ = samples [s1, s2, s3]
-    where 
+    where
     s1 = PatchUserGroup {
         patchUserGroupName = Just "developers"
       , patchUserGroupUsers = Just [0, 42, 3]
@@ -414,7 +441,7 @@ type AuthAPI =
   :<|> AuthDeleteGroupMethod
   :<|> AuthGroupsMethod
 
--- | How to get a token, expire of 'Nothing' means 
+-- | How to get a token, expire of 'Nothing' means
 -- some default value (server config).
 --
 -- Logic of authorisation via this method is:
@@ -434,15 +461,15 @@ type AuthAPI =
 --
 -- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
 type AuthSigninMethod = "auth" :> "signin"
-  :> QueryParam "login" Login 
-  :> QueryParam "password" Password 
+  :> QueryParam "login" Login
+  :> QueryParam "password" Password
   :> QueryParam "expire" Seconds
   :> Get '[JSON] (OnlyField "token" SimpleToken)
 
 -- | Authorisation via code of single usage.
 --
 -- Logic of authorisation via this method is:
--- 
+--
 -- * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
 --
 -- * Server generates single use token and sends it via
@@ -462,13 +489,13 @@ type AuthSigninMethod = "auth" :> "signin"
 --
 -- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
 type AuthSigninGetCodeMethod = "auth" :> "signin" :> "code"
-  :> QueryParam "login" Login 
+  :> QueryParam "login" Login
   :> Get '[JSON] Unit
 
 -- | Authorisation via code of single usage.
 --
 -- Logic of authorisation via this method is:
--- 
+--
 -- * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
 --
 -- * Server generates single use token and sends it via
@@ -488,13 +515,13 @@ type AuthSigninGetCodeMethod = "auth" :> "signin" :> "code"
 --
 -- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
 type AuthSigninPostCodeMethod = "auth" :> "signin" :> "code"
-  :> QueryParam "login" Login 
+  :> QueryParam "login" Login
   :> QueryParam "code" SingleUseCode
   :> QueryParam "expire" Seconds
   :> Post '[JSON] (OnlyField "token" SimpleToken)
 
 -- | Client cat expand the token lifetime, no permissions are required
-type AuthTouchMethod = "auth" :> "touch" 
+type AuthTouchMethod = "auth" :> "touch"
   :> QueryParam "expire" Seconds
   :> TokenHeader '[]
   :> Post '[JSON] Unit
@@ -525,20 +552,20 @@ type AuthUsersMethod = "auth" :> "users"
 
 -- | Getting info about user, requires 'authInfoPerm' for token
 type AuthGetUserMethod = "auth" :> "user"
-  :> Capture "user-id" UserId 
+  :> Capture "user-id" UserId
   :> TokenHeader' '["auth-info"]
   :> Get '[JSON] RespUserInfo
 
 -- | Updating login/email/password, requires 'authUpdatePerm' for token
 type AuthPatchUserMethod = "auth" :> "user"
-  :> Capture "user-id" UserId 
+  :> Capture "user-id" UserId
   :> ReqBody '[JSON] PatchUser
   :> TokenHeader' '["auth-update"]
   :> Patch '[JSON] Unit
 
 -- | Replace user with the user in the body, requires 'authUpdatePerm' for token
 type AuthPutUserMethod = "auth" :> "user"
-  :> Capture "user-id" UserId 
+  :> Capture "user-id" UserId
   :> ReqBody '[JSON] ReqRegister
   :> TokenHeader' '["auth-update"]
   :> Put '[JSON] Unit
@@ -546,21 +573,21 @@ type AuthPutUserMethod = "auth" :> "user"
 -- | Delete user from DB, requires 'authDeletePerm' and will cause cascade
 -- deletion, that is your usually want
 type AuthDeleteUserMethod = "auth" :> "user"
-  :> Capture "user-id" UserId 
+  :> Capture "user-id" UserId
   :> TokenHeader' '["auth-delete"]
   :> Delete '[JSON] Unit
 
 -- | Generate new password for user. There is two phases, first, the method
 -- is called without 'code' parameter. The system sends email with a restore code
--- to user email or sms (its depends on server). After that a call of the method 
+-- to user email or sms (its depends on server). After that a call of the method
 -- with the code is needed to change password.
-type AuthRestoreMethod = "auth" :> "restore" 
+type AuthRestoreMethod = "auth" :> "restore"
   :> Capture "user-id" UserId
-  :> QueryParam "code" RestoreCode 
-  :> QueryParam "password" Password 
+  :> QueryParam "code" RestoreCode
+  :> QueryParam "password" Password
   :> Post '[JSON] Unit
 
--- | Generate single usage codes that user can write down and use later for emergency 
+-- | Generate single usage codes that user can write down and use later for emergency
 -- authorisation.
 --
 -- 'Nothing' for "codes-count" parameter means some default value defined by server. Server
@@ -574,7 +601,7 @@ type AuthRestoreMethod = "auth" :> "restore"
 -- See also: 'AuthSigninPostCodeMethod' for utilisation of the codes.
 type AuthGetSingleUseCodes = "auth" :> "codes"
   :> Capture "user-id" UserId
-  :> QueryParam "codes-count" Word 
+  :> QueryParam "codes-count" Word
   :> TokenHeader' '["auth-single-codes"]
   :> Get '[JSON] (OnlyField "codes" [SingleUseCode])
 
@@ -610,16 +637,16 @@ type AuthDeleteGroupMethod = "auth" :> "group"
   :> TokenHeader' '["auth-delete"]
   :> Delete '[JSON] Unit
 
--- | Get list of user groups, requires 'authInfoPerm' for token 
+-- | Get list of user groups, requires 'authInfoPerm' for token
 type AuthGroupsMethod = "auth" :> "group"
   :> PageParam
   :> PageSizeParam
   :> TokenHeader' '["auth-info"]
   :> Get '[JSON] (PagedList UserGroupId UserGroup)
 
--- | Proxy type for auth API, used to pass the type-level info into 
+-- | Proxy type for auth API, used to pass the type-level info into
 -- client/docs generation functions
-authAPI :: Proxy AuthAPI 
+authAPI :: Proxy AuthAPI
 authAPI = Proxy
 
 -- | Permission that allows everything by default
@@ -631,11 +658,11 @@ registerPerm :: Permission
 registerPerm = "auth-register"
 
 -- | Permission that allows to query info about other users
-authInfoPerm :: Permission 
+authInfoPerm :: Permission
 authInfoPerm = "auth-info"
 
 -- | Permission that allows to update fields of an user
-authUpdatePerm :: Permission 
+authUpdatePerm :: Permission
 authUpdatePerm = "auth-update"
 
 -- | Permission that allows to delete users and cause cascade deletion
@@ -649,12 +676,12 @@ authOperations = operationsOf $ toSwagger (Proxy :: Proxy AuthAPI)
 -- | "Servant.Docs" documentation of the Auth API
 authDocs :: API
 authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
-  where 
+  where
   intro = DocIntro "Authorisation API by token"
     [ "The API provides stateless way to implement authorisation for RESTful APIs. A user of the API get a token once and can query other methods of server only providing the token until it expires."
     , "Also the API provides a way to pack users in hierarchy of groups with attached permissions."
     ]
-  extra = 
+  extra =
        mkExtra' (Proxy :: Proxy AuthSigninMethod) ["How to get a token, missing expire means some default value (server config).", simpleAuthDescr]
     <> mkExtra' (Proxy :: Proxy AuthSigninGetCodeMethod) ["Authorisation via codes of single usage, that are sended to user via different channel of communication.", singleUseAuthDescr]
     <> mkExtra' (Proxy :: Proxy AuthSigninPostCodeMethod) ["Authorisation via codes of single usage, that are sended to user via different channel of communication.", singleUseAuthDescr]
@@ -676,9 +703,9 @@ authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
     <> mkExtra (Proxy :: Proxy AuthDeleteGroupMethod) "Delete all info about given user group, requires 'authDeletePerm' for token"
     <> mkExtra (Proxy :: Proxy AuthGroupsMethod) "Get list of user groups, requires 'authInfoPerm' for token "
 
-  mkExtra p s = extraInfo p $  
+  mkExtra p s = extraInfo p $
     defAction & notes <>~ [ DocNote "Description" [s] ]
-  mkExtra' p ss = extraInfo p $  
+  mkExtra' p ss = extraInfo p $
     defAction & notes <>~ [ DocNote "Description" ss ]
 
   simpleAuthDescr = [r|
@@ -686,96 +713,96 @@ authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
 
     * Client sends GET request to the endpoint with
     user specified login and password and optional expire
-   
+
     * Server responds with token or error
-   
+
     * Client uses the token with other requests as authorisation
     header
-   
+
     * Client can extend lifetime of token by periodically pinging
     of 'AuthTouchMethod' endpoint
-   
+
     * Client can invalidate token instantly by 'AuthSignoutMethod'
-   
+
     * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
     |]
 
   singleUseAuthDescr = [r|
     Logic of authorisation via single use code method is:
-    
+
     * Client sends GET request to 'AuthSigninGetCodeMethod' endpoint
-   
+
     * Server generates single use token and sends it via
       SMS or email (server specific implementation)
-   
+
     * Client sends POST request to 'AuthSigninPostCodeMethod' endpoint
-   
+
     * Server responds with auth token.
-   
+
     * Client uses the token with other requests as authorisation
     header
-   
+
     * Client can extend lifetime of token by periodically pinging
     of 'AuthTouchMethod' endpoint
-   
+
     * Client can invalidate token instantly by 'AuthSignoutMethod'
-   
+
     * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
     |]
 
   authGetSingleUseCodesDescr = [r|
-    Generate single usage codes that user can write down and use later for emergency 
+    Generate single usage codes that user can write down and use later for emergency
     authorisation.
-   
+
     'Nothing' for "codes-count" parameter means some default value defined by server. Server
     can restrict maximum count of such codes.
-   
+
     Server should invalidate previous codes on subsequent calls of the endpoint.
-   
+
     Special authorisation tag can be used to disable the feature, merely don't give
     the tag to users and they won't be able to generate codes.
-   
+
     See also: 'AuthSigninPostCodeMethod' for utilisation of the codes.
     |]
 
-instance ToSample Word where 
+instance ToSample Word where
   toSamples _ = samples [0, 4, 8, 15, 16, 23, 42]
 
-instance ToSample Text where 
+instance ToSample Text where
   toSamples _ = samples ["", "some text", "magic"]
 
 #if MIN_VERSION_servant_docs(0,8,0)
-instance ToSample () where 
+instance ToSample () where
   toSamples _ = singleSample ()
 #endif
 
 -- | Unlifting compile-time permissions into list of run-time permissions
-class PermsList (a :: [PermSymbol]) where 
+class PermsList (a :: [PermSymbol]) where
   unliftPerms :: forall proxy . proxy a -> [Permission]
 
-instance PermsList '[] where 
+instance PermsList '[] where
   unliftPerms _ = []
 
-instance (UnliftPermSymbol x, PermsList xs) => PermsList (x ': xs) where 
+instance (UnliftPermSymbol x, PermsList xs) => PermsList (x ': xs) where
   unliftPerms _ = T.pack (unliftPermSymbol (Proxy :: Proxy x))
     : unliftPerms (Proxy :: Proxy xs)
 
 -- | Check whether a 'b' is contained in permission list of 'a'
-type family ContainPerm (a :: [PermSymbol]) (b :: PermSymbol) where 
+type family ContainPerm (a :: [PermSymbol]) (b :: PermSymbol) where
   ContainPerm '[] b = 'False
   ContainPerm (a ': as) a = 'True
   ContainPerm (a ': as) b = ContainPerm as b
 
 -- | Check that first set of permissions is subset of second
-type family ConatinAllPerm (a :: [PermSymbol]) (b :: [PermSymbol]) where 
+type family ConatinAllPerm (a :: [PermSymbol]) (b :: [PermSymbol]) where
   ConatinAllPerm '[] bs = '[]
   ConatinAllPerm (a ': as) bs = (ContainPerm bs a) ': (ConatinAllPerm as bs)
 
 -- | Foldl type level list of bools, identicall to 'and'
-type family TAll (a :: [Bool]) :: Bool where 
+type family TAll (a :: [Bool]) :: Bool where
   TAll '[] = 'True
-  TAll ('True ': as) = TAll as 
-  TAll ('False ': as) = 'False 
+  TAll ('True ': as) = TAll as
+  TAll ('False ': as) = 'False
 
 -- | Check that first set of permissions is subset of second, throw error if not
 type PermsSubset (a :: [PermSymbol]) (b :: [PermSymbol]) = TAll (ConatinAllPerm a b)
@@ -783,8 +810,8 @@ type PermsSubset (a :: [PermSymbol]) (b :: [PermSymbol]) = TAll (ConatinAllPerm 
 -- | Cast token to permissions that are lower than original one
 --
 -- The cast is safe, the permissions are cheked on compile time.
-downgradeToken' :: 'True ~ PermsSubset ts' ts => Token ts -> Token ts' 
-downgradeToken' = Token . unToken 
+downgradeToken' :: 'True ~ PermsSubset ts' ts => Token ts -> Token ts'
+downgradeToken' = Token . unToken
 
 -- | Cast token to permissions that are lower than original one.
 --
