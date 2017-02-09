@@ -1,5 +1,5 @@
 name:                servant-auth-token-api
-version:             0.3.2.0
+version:             0.4.0.0
 synopsis:            Servant based API for token based authorisation
 description:         Please see README.md
 homepage:            https://github.com/ncrashed/servant-auth-token-api#readme
@@ -27,16 +27,16 @@ library
     Servant.API.Auth.Token.Internal.DeriveJson
     Servant.API.Auth.Token.Internal.Schema
   build-depends:
-      base >= 4.7 && < 5
-    , aeson >= 0.11 && < 0.12
-    , aeson-injector >= 1.0.4 && < 1.1
-    , lens >= 4.13 && < 5
-    , raw-strings-qq >= 1.1 && < 1.2
-    , servant >= 0.7 && < 0.9
-    , servant-docs >= 0.7 && < 0.9
-    , servant-swagger >= 1.0 && < 2
-    , swagger2 >= 2.0 && <= 3
-    , text >= 1.2 && < 2
+      base            >= 4.7    && < 5
+    , aeson           >= 0.11   && < 0.12
+    , aeson-injector  >= 1.0.4  && < 1.1
+    , lens            >= 4.13   && < 5
+    , raw-strings-qq  >= 1.1    && < 1.2
+    , servant         >= 0.9    && < 0.10
+    , servant-docs    >= 0.9    && < 0.10
+    , servant-swagger >= 1.1    && < 1.2
+    , swagger2        >= 2.1    && < 2.2
+    , text            >= 1.2    && < 2
 
   default-language:    Haskell2010
   default-extensions:
