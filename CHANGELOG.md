@@ -1,3 +1,13 @@
+0.4.0.1
+=======
+
+* Relax `aeson` version bound.
+
+0.4.0.0
+=======
+
+* Sync release with `servant-auth-token` package.
+
 0.3.2.0
 =======
 
