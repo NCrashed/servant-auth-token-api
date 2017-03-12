@@ -656,7 +656,7 @@ type AuthGroupsMethod = "auth" :> "group"
 type AuthCheckPermissionsMethod = "auth" :> "check"
   :> TokenHeader' '["auth-check"]
   :> ReqBody '[JSON] (OnlyField "permissions" [Permission])
-  :> Get '[JSON] Bool
+  :> Post '[JSON] Bool
 
 -- | Get the user id of the owner of specified token. 401 error is raised if
 -- the token doesn't have 'auth-userid' token.
