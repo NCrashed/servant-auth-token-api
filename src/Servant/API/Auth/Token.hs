@@ -41,6 +41,8 @@ module Servant.API.Auth.Token(
   , AuthPatchGroupMethod
   , AuthDeleteGroupMethod
   , AuthGroupsMethod
+  , AuthCheckPermissionsMethod
+  , AuthGetUserIdMethod
   , authAPI
   , authDocs
   -- ** Permission symbol
@@ -81,10 +83,12 @@ module Servant.API.Auth.Token(
   , PatchUserGroup(..)
   -- ** Default permissions
   , adminPerm
-  , registerPerm
+  , authCheckPerm
+  , authDeletePerm
   , authInfoPerm
   , authUpdatePerm
-  , authDeletePerm
+  , authUserIdPerm
+  , registerPerm
   -- * Swagger helpers
   , authOperations
   ) where
@@ -440,6 +444,8 @@ type AuthAPI =
   :<|> AuthPatchGroupMethod
   :<|> AuthDeleteGroupMethod
   :<|> AuthGroupsMethod
+  :<|> AuthCheckPermissionsMethod
+  :<|> AuthGetUserIdMethod
 
 -- | How to get a token, expire of 'Nothing' means
 -- some default value (server config).
@@ -644,6 +650,20 @@ type AuthGroupsMethod = "auth" :> "group"
   :> TokenHeader' '["auth-info"]
   :> Get '[JSON] (PagedList UserGroupId UserGroup)
 
+-- | Check permissions of the token, if the passed token doesn't have permissions
+-- that are passed via body, server returns 'False'. 401 status is returned
+-- if the token owner is not permitted to check self permissions.
+type AuthCheckPermissionsMethod = "auth" :> "check"
+  :> TokenHeader' '["auth-check"]
+  :> ReqBody '[JSON] (OnlyField "permissions" [Permission])
+  :> Get '[JSON] Bool
+
+-- | Get the user id of the owner of specified token. 401 error is raised if
+-- the token doesn't have 'auth-userid' token.
+type AuthGetUserIdMethod = "auth" :> "userid"
+  :> TokenHeader' '["auth-userid"]
+  :> Get '[JSON] (OnlyId UserId)
+
 -- | Proxy type for auth API, used to pass the type-level info into
 -- client/docs generation functions
 authAPI :: Proxy AuthAPI
@@ -668,6 +688,15 @@ authUpdatePerm = "auth-update"
 -- | Permission that allows to delete users and cause cascade deletion
 authDeletePerm :: Permission
 authDeletePerm = "auth-delete"
+
+-- | Permission that allows to check permissions of token that has the
+-- permission.
+authCheckPerm :: Permission
+authCheckPerm = "auth-check"
+
+-- | Permission that allows to get user ID of owner of token.
+authUserIdPerm :: Permission
+authUserIdPerm = "auth-userid"
 
 -- | Select only operations of the Auth API
 authOperations :: Traversal' Swagger Operation
@@ -702,6 +731,8 @@ authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
     <> mkExtra (Proxy :: Proxy AuthPatchGroupMethod) "Patch info about given user group, requires 'authUpdatePerm' for token"
     <> mkExtra (Proxy :: Proxy AuthDeleteGroupMethod) "Delete all info about given user group, requires 'authDeletePerm' for token"
     <> mkExtra (Proxy :: Proxy AuthGroupsMethod) "Get list of user groups, requires 'authInfoPerm' for token "
+    <> mkExtra (Proxy :: Proxy AuthCheckPermissionsMethod) "Check persistence of passed permissions of the token, requires 'authCheckPerm' for token"
+    <> mkExtra (Proxy :: Proxy AuthGetUserIdMethod) "Get ID of owner of specified token, requires 'authUserIdPerm'"
 
   mkExtra p s = extraInfo p $
     defAction & notes <>~ [ DocNote "Description" [s] ]
