@@ -1,3 +1,8 @@
+0.4.2.0
+=======
+
+* Add `AuthFindUserByLogin` endpoint.
+
 0.4.1.0
 =======
 

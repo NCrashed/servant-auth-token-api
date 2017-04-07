@@ -446,6 +446,7 @@ type AuthAPI =
   :<|> AuthGroupsMethod
   :<|> AuthCheckPermissionsMethod
   :<|> AuthGetUserIdMethod
+  :<|> AuthFindUserByLogin
 
 -- | How to get a token, expire of 'Nothing' means
 -- some default value (server config).
@@ -664,6 +665,13 @@ type AuthGetUserIdMethod = "auth" :> "userid"
   :> TokenHeader' '["auth-userid"]
   :> Get '[JSON] (OnlyId UserId)
 
+-- | Allows to find user info by login, requires 'authInfoPerm' permission.
+-- Throws 404 if cannot find account with such login.
+type AuthFindUserByLogin = "auth" :> "user" :> "bylogin"
+  :> QueryParam "login" Login
+  :> TokenHeader' '["auth-info"]
+  :> Get '[JSON] RespUserInfo
+
 -- | Proxy type for auth API, used to pass the type-level info into
 -- client/docs generation functions
 authAPI :: Proxy AuthAPI
@@ -733,6 +741,7 @@ authDocs = docsWith defaultDocOptions [intro] extra (Proxy :: Proxy AuthAPI)
     <> mkExtra (Proxy :: Proxy AuthGroupsMethod) "Get list of user groups, requires 'authInfoPerm' for token "
     <> mkExtra (Proxy :: Proxy AuthCheckPermissionsMethod) "Check persistence of passed permissions of the token, requires 'authCheckPerm' for token"
     <> mkExtra (Proxy :: Proxy AuthGetUserIdMethod) "Get ID of owner of specified token, requires 'authUserIdPerm'"
+    <> mkExtra (Proxy :: Proxy AuthFindUserByLogin) "Find user info by login, requires 'authInfoPerm'"
 
   mkExtra p s = extraInfo p $
     defAction & notes <>~ [ DocNote "Description" [s] ]
