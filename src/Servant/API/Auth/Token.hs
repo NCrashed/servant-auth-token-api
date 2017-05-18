@@ -474,6 +474,7 @@ type AuthSigninMethod = "auth" :> "signin"
   :> QueryParam "password" Password
   :> QueryParam "expire" Seconds
   :> Get '[JSON] (OnlyField "token" SimpleToken)
+{-# DEPRECATED AuthSigninMethod "AuthSigninPostMethod is more secure" #-}
 
 -- | How to get a token, expire of 'Nothing' means
 -- some default value (server config).
