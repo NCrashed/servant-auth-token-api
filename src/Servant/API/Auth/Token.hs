@@ -22,6 +22,7 @@ module Servant.API.Auth.Token(
   -- * API specs
     AuthAPI
   , AuthSigninMethod
+  , AuthSigninPostMethod
   , AuthSigninGetCodeMethod
   , AuthSigninPostCodeMethod
   , AuthTouchMethod
@@ -425,6 +426,7 @@ instance ToCapture (Capture "group-id" UserGroupId) where
 -- | Generic authorization API
 type AuthAPI =
        AuthSigninMethod
+  :<|> AuthSigninPostMethod
   :<|> AuthSigninGetCodeMethod
   :<|> AuthSigninPostCodeMethod
   :<|> AuthTouchMethod
@@ -472,6 +474,32 @@ type AuthSigninMethod = "auth" :> "signin"
   :> QueryParam "password" Password
   :> QueryParam "expire" Seconds
   :> Get '[JSON] (OnlyField "token" SimpleToken)
+{-# DEPRECATED AuthSigninMethod "AuthSigninPostMethod is more secure" #-}
+
+-- | How to get a token, expire of 'Nothing' means
+-- some default value (server config).
+--
+-- Logic of authorisation via this method is:
+--
+-- * Client sends POST request to the endpoint with
+-- user specified login and password and optional expire
+--
+-- * Server responds with token or error
+--
+-- * Client uses the token with other requests as authorisation
+-- header
+--
+-- * Client can extend lifetime of token by periodically pinging
+-- of 'AuthTouchMethod' endpoint
+--
+-- * Client can invalidate token instantly by 'AuthSignoutMethod'
+--
+-- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
+type AuthSigninPostMethod = "auth" :> "signin"
+  :> QueryParam "login" Login
+  :> QueryParam "password" Password
+  :> QueryParam "expire" Seconds
+  :> Post '[JSON] (OnlyField "token" SimpleToken)
 
 -- | Authorisation via code of single usage.
 --
