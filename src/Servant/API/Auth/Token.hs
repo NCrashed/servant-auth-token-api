@@ -78,6 +78,7 @@ module Servant.API.Auth.Token(
   , RespUserInfo(..)
   , PatchUser(..)
   , RespUsersInfo(..)
+  , AuthSigninPostBody(..)
   -- ** User groups
   , UserGroupId
   , UserGroup(..)
@@ -407,6 +408,37 @@ instance ToSample PatchUserGroup where
       , patchUserGroupNoParent = Just True
       }
 
+-- | Body for 'AuthSigninPostMethod'
+data AuthSigninPostBody = AuthSigninPostBody {
+  authSigninBodyLogin    :: !Login
+, authSigninBodyPassword :: !Password
+, authSigninBodySeconds  :: !(Maybe Seconds) -- ^ Nothing is default server value
+} deriving (Generic, Show)
+$(deriveJSON (derivePrefix "authSigninBody") ''AuthSigninPostBody)
+
+instance ToSchema AuthSigninPostBody where
+  declareNamedSchema = genericDeclareNamedSchema $
+    schemaOptionsDropPrefix "authSigninBody"
+
+instance ToSample AuthSigninPostBody where
+  toSamples _ = samples [s1, s2, s3]
+    where
+    s1 = AuthSigninPostBody {
+        authSigninBodyLogin = "admin"
+      , authSigninBodyPassword = "123456"
+      , authSigninBodySeconds = Nothing
+      }
+    s2 = AuthSigninPostBody {
+        authSigninBodyLogin = "sviborg"
+      , authSigninBodyPassword = "qwerty"
+      , authSigninBodySeconds = Just 360
+      }
+    s3 = AuthSigninPostBody {
+        authSigninBodyLogin = "schoolgirl"
+      , authSigninBodyPassword = "ilovepony"
+      , authSigninBodySeconds = Just 42
+      }
+
 instance ToParam (QueryParam "login" Login) where
   toParam _ = DocQueryParam "login" ["ncrashed", "buddy"] "Any valid login for user" Normal
 instance ToParam (QueryParam "password" Password) where
@@ -496,9 +528,7 @@ type AuthSigninMethod = "auth" :> "signin"
 --
 -- * Client can get info about user with 'AuthTokenInfoMethod' endpoint.
 type AuthSigninPostMethod = "auth" :> "signin"
-  :> QueryParam "login" Login
-  :> QueryParam "password" Password
-  :> QueryParam "expire" Seconds
+  :> ReqBody '[JSON] AuthSigninPostBody
   :> Post '[JSON] (OnlyField "token" SimpleToken)
 
 -- | Authorisation via code of single usage.
