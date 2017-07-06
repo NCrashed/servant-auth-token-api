@@ -1,3 +1,8 @@
+0.5.0.0
+=======
+
+* Add `AuthSigninPostMethod` to substitute security weak `AuthSigninMethod`.
+
 0.4.2.1
 =======
 
