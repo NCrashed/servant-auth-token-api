@@ -175,7 +175,7 @@ newtype Token (perms :: [PermSymbol]) = Token { unToken :: Text }
 type Token' (perms :: [Symbol]) = Token (PlainPerms perms)
 
 instance ToParamSchema (Token perms) where
-  toParamSchema _ = mempty { _paramSchemaType = SwaggerString }
+  toParamSchema _ = mempty { _paramSchemaType = Just SwaggerString }
 
 instance FromHttpApiData (Token perms) where
   parseUrlPiece = fmap Token . parseUrlPiece
