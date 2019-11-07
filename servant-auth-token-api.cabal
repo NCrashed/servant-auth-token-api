@@ -1,7 +1,8 @@
 name:                servant-auth-token-api
 version:             0.5.4.0
 synopsis:            Servant based API for token based authorisation
-description:         Please see README.md
+description:         The package provides cross compiler API (for GHC and GHCJS) for
+                     <http://hackage.haskell.org/package/servant-auth-token servant-auth-token>. Please see README.md
 homepage:            https://github.com/ncrashed/servant-auth-token-api#readme
 license:             BSD3
 license-file:        LICENSE
