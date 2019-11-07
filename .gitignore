@@ -1,5 +1,8 @@
 .stack-work
+stack.yaml.lock
 *.sublime-workspace
 dist
 .cabal-sandbox
 cabal.sandbox.config
+.ghc.environment*
+dist-newstyle/

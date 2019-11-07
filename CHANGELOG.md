@@ -1,3 +1,8 @@
+0.5.4.0
+=======
+
+* Bump versions for `servant-0.16` and `swagger-2.4`.
+
 0.5.3.0
 =======
 
